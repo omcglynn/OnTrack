@@ -23,38 +23,35 @@ export function ProfileEditDialog({ open, onOpenChange, profile, onProfileUpdate
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Load universities and majors
+  // Load universities when dialog opens
   useEffect(() => {
     if (open) {
-      const fetchData = async () => {
+      const fetchUniversities = async () => {
         setLoading(true);
         try {
-          const [universitiesResponse, majorsResponse] = await Promise.all([
-            supabase.from('universities').select('name, id, aliases'),
-            supabase.from('majors').select('id, name, uniId'),
-          ]);
+          const { data, error } = await supabase
+            .from('universities')
+            .select('name, id, aliases');
 
-          if (universitiesResponse.error) throw universitiesResponse.error;
-          if (majorsResponse.error) throw majorsResponse.error;
-
-          setUniversities(universitiesResponse.data || []);
-          setMajors(majorsResponse.data || []);
+          if (error) throw error;
+          setUniversities(data || []);
         } catch (error: any) {
-          toast.error('Failed to load data: ' + error.message);
+          toast.error('Failed to load universities: ' + error.message);
         } finally {
           setLoading(false);
         }
       };
 
-      fetchData();
+      fetchUniversities();
       setEditedProfile(profile);
     }
   }, [open, profile]);
 
-  // Fetch majors when university changes
+  // Fetch majors when university changes or dialog opens with existing university
   useEffect(() => {
     const fetchMajors = async () => {
-      if (!editedProfile.universityId) {
+      const universityId = editedProfile.universityId;
+      if (!universityId) {
         setMajors([]);
         return;
       }
@@ -63,7 +60,7 @@ export function ProfileEditDialog({ open, onOpenChange, profile, onProfileUpdate
         const { data, error } = await supabase
           .from('majors')
           .select('id, name, uniId')
-          .eq('uniId', editedProfile.universityId);
+          .eq('uniId', universityId);
 
         if (error) throw error;
         setMajors(data || []);

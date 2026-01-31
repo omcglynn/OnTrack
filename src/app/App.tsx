@@ -4,12 +4,16 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { supabase, isSupabaseConfigured } from '@/app/lib/supabase';
 import { AuthPage } from '@/app/components/auth-page';
 import { Onboarding, UserProfile } from '@/app/components/onboarding';
-import { RoadmapView } from '@/app/components/roadmap-view';
+import { RoadmapView, calculateGPA, PlannedCourse, SemesterPlan } from '@/app/components/roadmap-view';
 import { WeeklyScheduleBuilder } from '@/app/components/weekly-schedule-builder';
 import { CourseDetailModal } from '@/app/components/course-detail-modal';
 import { CourseListPanel } from '@/app/components/course-list-panel';
 import { AIChatbot } from '@/app/components/ai-chatbot';
 import { ProfileEditDialog } from '@/app/components/profile-edit-dialog';
+import { SchedulePreviewModal } from '@/app/components/schedule-preview-modal';
+import { AIScheduleRecommendation } from '@/app/lib/gemini';
+import { buildScheduleFromCodes, GeneratedSchedule, ScheduledCourse } from '@/app/utils/schedule-generator';
+import { RequirementsBreakdown } from '@/app/components/requirements-breakdown';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
@@ -41,6 +45,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isProfileEditOpen, setIsProfileEditOpen] = useState(false);
+  const [autoOpenAddCourse, setAutoOpenAddCourse] = useState(false);
+  const [isSchedulePreviewOpen, setIsSchedulePreviewOpen] = useState(false);
+  const [generatedSchedule, setGeneratedSchedule] = useState<GeneratedSchedule | null>(null);
+  const [scheduleReasoning, setScheduleReasoning] = useState<string>('');
+  const [shouldReopenSchedulePreview, setShouldReopenSchedulePreview] = useState(false);
 
   // Helper function to load user profile and navigate appropriately
   const loadUserProfile = async (userId: string): Promise<boolean> => {
@@ -68,7 +77,7 @@ export default function App() {
         university: universityResult.data?.name || '',
         universityId: profileData.uniID,
         major: majorResult.data?.name || '',
-        majorId: profileData.majorId,
+        majorId: profileData.majorId ? String(profileData.majorId) : '',
         careerGoal: profileData.careerGoal || '',
         internshipPreference: 'summer-year3',
         maxCreditsPerSemester: 15,
@@ -167,11 +176,113 @@ export default function App() {
     setUserProfile(updatedProfile);
   };
 
+  // Handle AI schedule generation
+  const handleScheduleGenerated = (recommendation: AIScheduleRecommendation) => {
+    if (!selectedPlan) return;
+    
+    // Get completed courses
+    const completedCourses = selectedPlan.semesters
+      .flatMap((s: SemesterPlan) => s.courses)
+      .filter((c: PlannedCourse) => c.completed)
+      .map((c: PlannedCourse) => c.code);
+    
+    // Build the schedule with time slots
+    const schedule = buildScheduleFromCodes(
+      recommendation.courseCodes,
+      completedCourses,
+      []
+    );
+    
+    setGeneratedSchedule(schedule);
+    setScheduleReasoning(recommendation.reasoning);
+    setIsSchedulePreviewOpen(true);
+  };
+
+  // Handle applying generated schedule to a semester
+  const handleApplySchedule = (semesterIndex: number, scheduledCourses: ScheduledCourse[]) => {
+    if (!selectedPlan || !userProfile) return;
+    
+    // Get the existing plan and update it
+    const updatedSemesters = [...selectedPlan.semesters];
+    const targetSemester = { ...updatedSemesters[semesterIndex] };
+    
+    // Convert scheduled courses to PlannedCourses and merge with existing
+    const newCourses: PlannedCourse[] = scheduledCourses.map(sc => ({
+      ...sc.course, // Include all Course fields (id, code, name, credits, description, etc.)
+      completed: false,
+      schedule: sc.schedule,
+    }));
+    
+    // Merge: add new courses that aren't already in the semester
+    const existingCodes = new Set(targetSemester.courses.map((c: PlannedCourse) => c.code));
+    const coursesToAdd = newCourses.filter(c => !existingCodes.has(c.code));
+    
+    // Update courses and recalculate total credits
+    const updatedCourses = [...targetSemester.courses, ...coursesToAdd];
+    targetSemester.courses = updatedCourses;
+    targetSemester.totalCredits = updatedCourses.reduce((sum, c) => sum + c.credits, 0);
+    
+    // Update status if it was unplanned and now has courses
+    if (targetSemester.status === 'unplanned' && updatedCourses.length > 0) {
+      targetSemester.status = 'planned';
+    }
+    
+    updatedSemesters[semesterIndex] = targetSemester;
+    
+    // Update the state to persist the changes
+    setAllPlans(prevPlans => 
+      prevPlans.map(plan => 
+        plan.id === selectedPlanId 
+          ? { ...plan, semesters: updatedSemesters }
+          : plan
+      )
+    );
+    
+    // Show success toast
+    if (coursesToAdd.length > 0) {
+      toast.success(`Added ${coursesToAdd.length} course${coursesToAdd.length > 1 ? 's' : ''} to ${targetSemester.season} ${targetSemester.year}!`);
+    } else {
+      toast.info('All courses are already in this semester.');
+    }
+    
+    // Close the modal and clear generated schedule
+    setIsSchedulePreviewOpen(false);
+    setGeneratedSchedule(null);
+  };
+
+  // Get available semesters for schedule application
+  const getAvailableSemesters = () => {
+    if (!selectedPlan) return [];
+    return selectedPlan.semesters.map((sem: SemesterPlan, index: number) => ({
+      index,
+      name: `${sem.season} ${sem.year}`,
+      isEmpty: sem.courses.length === 0,
+    }));
+  };
+
   // Scroll handler is now on the main content div, not window
 
-  // Generate all plans if we have a profile
-  const allPlans = userProfile ? generatePlans(userProfile) : [];
+  // Generate all plans if we have a profile - now stateful for modifications
+  const [allPlans, setAllPlans] = useState<any[]>([]);
+  
+  useEffect(() => {
+    if (userProfile) {
+      setAllPlans(generatePlans(userProfile));
+    }
+  }, [userProfile]);
+  
   const selectedPlan = allPlans.find(p => p.id === selectedPlanId);
+
+  // Handler to update semesters in a plan
+  const handleUpdateSemesters = (updatedSemesters: SemesterPlan[]) => {
+    setAllPlans(prevPlans => 
+      prevPlans.map(plan => 
+        plan.id === selectedPlanId 
+          ? { ...plan, semesters: updatedSemesters }
+          : plan
+      )
+    );
+  };
   
 
   // Show loading screen during initial auth check
@@ -229,10 +340,20 @@ export default function App() {
   }
 
   if (view === 'onboarding') {
+    const handleOnboardingBack = async () => {
+      try {
+        await supabase.auth.signOut();
+        setUserProfile(null);
+        setView('auth');
+      } catch (error: any) {
+        toast.error('Failed to log out: ' + error.message);
+      }
+    };
+
     return (
       <>
         <Toaster position="top-center" richColors />
-        <Onboarding onComplete={handleOnboardingComplete} />
+        <Onboarding onComplete={handleOnboardingComplete} onBack={handleOnboardingBack} />
       </>
     );
   }
@@ -299,11 +420,13 @@ export default function App() {
             </div>
 
             {/* Three-column layout: Course List | Main Content | AI Chatbot */}
-            <div className="flex overflow-hidden relative" style={{ 
-              marginTop: isHeaderVisible ? '88px' : '0px', 
-              height: isHeaderVisible ? 'calc(100vh - 88px)' : '100vh',
-              transition: 'margin-top 0.3s, height 0.3s' 
-            }}>
+            <div 
+              className="flex overflow-hidden relative transition-all duration-300" 
+              style={{ 
+                marginTop: isHeaderVisible ? '88px' : '0', 
+                height: isHeaderVisible ? 'calc(100vh - 88px)' : '100vh',
+              }}
+            >
               {/* Left Panel - Course List (Collapsible) */}
               <div 
                 className={`transition-all duration-300 ease-in-out bg-white border-r shadow-sm ${
@@ -367,25 +490,44 @@ export default function App() {
                 </div>
 
                 <div 
-                  className="flex-1 overflow-y-auto"
+                  className="flex-1 overflow-y-auto scroll-smooth"
                   onScroll={(e) => {
                     const target = e.target as HTMLDivElement;
                     const currentScrollY = target.scrollTop;
                     const lastScrollY = lastScrollYRef.current;
+                    const scrollDelta = currentScrollY - lastScrollY;
                     
-                    if (currentScrollY > lastScrollY && currentScrollY > 80) {
-                      setIsHeaderVisible(false);
-                    } else {
-                      setIsHeaderVisible(true);
+                    // Only change header visibility with significant scroll movement
+                    // and add a dead zone to prevent jitter
+                    const deadZone = 10;
+                    
+                    if (Math.abs(scrollDelta) > deadZone) {
+                      if (scrollDelta > 0 && currentScrollY > 100) {
+                        // Scrolling down past threshold - hide header
+                        setIsHeaderVisible(false);
+                      } else if (scrollDelta < 0 || currentScrollY < 50) {
+                        // Scrolling up or near top - show header
+                        setIsHeaderVisible(true);
+                      }
+                      // Update ref only when we make a significant scroll
+                      lastScrollYRef.current = currentScrollY;
                     }
-                    
-                    // Use ref instead of state to avoid re-renders
-                    lastScrollYRef.current = currentScrollY;
                   }}
                 >
                   <div className="container mx-auto max-w-5xl px-4 py-8">
                     {/* Tabs */}
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-8">
+                    <Tabs value={activeTab} onValueChange={(tab) => {
+                      // When switching to schedule tab, default to current (in-progress) semester
+                      if (tab === 'schedule' && activeTab !== 'schedule') {
+                        const currentSemesterIndex = selectedPlan.semesters.findIndex(
+                          (s: SemesterPlan) => s.status === 'in-progress'
+                        );
+                        if (currentSemesterIndex !== -1) {
+                          setSelectedSemesterIndex(currentSemesterIndex);
+                        }
+                      }
+                      setActiveTab(tab);
+                    }} className="w-full mt-8">
                       <TabsList className="mb-6 bg-gradient-to-r from-purple-100 to-blue-100 p-1 shadow-lg border border-purple-200">
                         <TabsTrigger value="roadmap" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-md">
                           <Map className="w-4 h-4" />
@@ -410,6 +552,11 @@ export default function App() {
                             setSelectedSemesterIndex(semesterIndex);
                             setActiveTab('schedule');
                           }}
+                          onPlanSemester={(semesterIndex) => {
+                            setSelectedSemesterIndex(semesterIndex);
+                            setActiveTab('schedule');
+                            setAutoOpenAddCourse(true);
+                          }}
                         />
                       </TabsContent>
 
@@ -420,92 +567,116 @@ export default function App() {
                           onSemesterChange={setSelectedSemesterIndex}
                           careerGoal={userProfile.careerGoal}
                           onCourseClick={(course) => setSelectedCourse(course)}
+                          onUpdateSemesters={handleUpdateSemesters}
+                          autoOpenAddCourse={autoOpenAddCourse}
+                          onAutoOpenHandled={() => setAutoOpenAddCourse(false)}
                         />
                       </TabsContent>
 
                       <TabsContent value="overview">
                         <div className="space-y-6">
-                          {/* Selected Plan Info */}
-                          <div className="bg-white rounded-lg shadow-lg p-6">
-                            <div className="flex items-start justify-between mb-4">
-                              <div>
-                                <h3 className="text-2xl font-bold mb-2">{selectedPlan.name}</h3>
-                                <p className="text-gray-600">{selectedPlan.description}</p>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                              <div>
-                                <h4 className="font-semibold mb-3">Plan Highlights</h4>
-                                <ul className="space-y-2">
-                                  {selectedPlan.highlights.map((highlight: string, idx: number) => (
-                                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                                      <span className="text-green-600 mt-0.5">✓</span>
-                                      {highlight}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-
-                              <div>
-                                <h4 className="font-semibold mb-3">Your Profile</h4>
-                                <div className="space-y-2 text-sm">
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">University:</span>
-                                    <span className="font-medium">{userProfile.university}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Major:</span>
-                                    <span className="font-medium">{userProfile.major}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Career Goal:</span>
-                                    <span className="font-medium">{userProfile.careerGoal}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Internship Plan:</span>
-                                    <span className="font-medium capitalize">{userProfile.internshipPreference?.replace('-', ' ')}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-gray-600">Max Credits/Sem:</span>
-                                    <span className="font-medium">{userProfile.maxCreditsPerSemester}</span>
+                          {/* Graduation Requirements Progress */}
+                          {(() => {
+                            // Calculate completed credits by category
+                            const completedCourses: PlannedCourse[] = selectedPlan.semesters
+                              .flatMap((s: SemesterPlan) => s.courses)
+                              .filter((c: PlannedCourse) => c.completed);
+                            
+                            const cisCore = completedCourses
+                              .filter((c: PlannedCourse) => c.category === 'major')
+                              .reduce((sum: number, c: PlannedCourse) => sum + c.credits, 0);
+                            const math = completedCourses
+                              .filter((c: PlannedCourse) => c.category === 'core')
+                              .reduce((sum: number, c: PlannedCourse) => sum + c.credits, 0);
+                            const labScience = completedCourses
+                              .filter((c: PlannedCourse) => c.category === 'lab-science')
+                              .reduce((sum: number, c: PlannedCourse) => sum + c.credits, 0);
+                            const csElectives = completedCourses
+                              .filter((c: PlannedCourse) => c.category === 'elective' && c.code.startsWith('CIS'))
+                              .reduce((sum: number, c: PlannedCourse) => sum + c.credits, 0);
+                            const genEdFoundation = completedCourses
+                              .filter((c: PlannedCourse) => c.category === 'gen-ed' && ['GW', 'GQ', 'GY', 'GZ'].includes(c.genEdAttribute || ''))
+                              .reduce((sum: number, c: PlannedCourse) => sum + c.credits, 0);
+                            const genEdBreadth = completedCourses
+                              .filter((c: PlannedCourse) => c.category === 'gen-ed' && !['GW', 'GQ', 'GY', 'GZ'].includes(c.genEdAttribute || ''))
+                              .reduce((sum: number, c: PlannedCourse) => sum + c.credits, 0);
+                            
+                            // Also count gen-ed courses without specific attributes
+                            const untaggedGenEd = completedCourses
+                              .filter((c: PlannedCourse) => c.category === 'gen-ed' && !c.genEdAttribute)
+                              .reduce((sum: number, c: PlannedCourse) => sum + c.credits, 0);
+                            
+                            const gpaData = calculateGPA(selectedPlan.semesters);
+                            
+                            const requirements = [
+                              { name: 'CIS Core', completed: cisCore, total: 47, color: 'bg-purple-500' },
+                              { name: 'Mathematics', completed: math, total: 8, color: 'bg-blue-500' },
+                              { name: 'Lab Science', completed: labScience, total: 8, color: 'bg-cyan-500' },
+                              { name: 'CS Electives', completed: csElectives, total: 16, color: 'bg-green-500' },
+                              { name: 'Gen Ed Foundation', completed: genEdFoundation + (untaggedGenEd > 0 ? Math.min(untaggedGenEd, 14 - genEdFoundation) : 0), total: 14, color: 'bg-amber-500' },
+                              { name: 'Gen Ed Breadth', completed: genEdBreadth, total: 22, color: 'bg-rose-500' },
+                            ];
+                            
+                            return (
+                              <div className="bg-white rounded-lg shadow-lg p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                  <h3 className="font-bold text-lg">Graduation Requirements Progress</h3>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-gray-600">Cumulative GPA:</span>
+                                    <span className={`text-xl font-bold ${
+                                      gpaData.gpa >= 3.5 ? 'text-emerald-600' :
+                                      gpaData.gpa >= 3.0 ? 'text-blue-600' :
+                                      gpaData.gpa >= 2.0 ? 'text-amber-600' :
+                                      'text-red-600'
+                                    }`}>
+                                      {gpaData.completedCredits > 0 ? gpaData.gpa.toFixed(2) : '—'}
+                                    </span>
                                   </div>
                                 </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Graduation Requirements Progress */}
-                          <div className="bg-white rounded-lg shadow-lg p-6">
-                            <h3 className="font-bold text-lg mb-4">Graduation Requirements Progress</h3>
-                            <div className="space-y-4">
-                              {[
-                                { name: 'Major Core', completed: 0, total: 45, color: 'bg-purple-500' },
-                                { name: 'Math/Science', completed: 0, total: 18, color: 'bg-blue-500' },
-                                { name: 'General Education', completed: 0, total: 30, color: 'bg-gray-500' },
-                                { name: 'Electives', completed: 0, total: 27, color: 'bg-green-500' },
-                              ].map((req) => {
-                                const percentage = (req.completed / req.total) * 100;
-                                return (
-                                  <div key={req.name}>
-                                    <div className="flex justify-between mb-1 text-sm">
-                                      <span className="font-medium">{req.name}</span>
-                                      <span className="text-gray-600">{req.completed}/{req.total} credits</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2">
-                                      <div
-                                        className={`${req.color} h-2 rounded-full transition-all`}
-                                        style={{ width: `${percentage}%` }}
-                                      />
-                                    </div>
+                                <div className="space-y-4">
+                                  {requirements.map((req) => {
+                                    const percentage = Math.min((req.completed / req.total) * 100, 100);
+                                    return (
+                                      <div key={req.name}>
+                                        <div className="flex justify-between mb-1 text-sm">
+                                          <span className="font-medium">{req.name}</span>
+                                          <span className="text-gray-600">
+                                            {req.completed}/{req.total} credits
+                                            {req.completed >= req.total && ' ✓'}
+                                          </span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-2">
+                                          <div
+                                            className={`${req.color} h-2 rounded-full transition-all`}
+                                            style={{ width: `${percentage}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div className="mt-4 pt-4 border-t">
+                                  <div className="flex justify-between items-center mb-3">
+                                    <p className="text-sm text-gray-600">
+                                      Total: <span className="font-semibold">{gpaData.completedCredits}/120</span> credits completed
+                                    </p>
+                                    <p className="text-sm font-medium text-emerald-600">
+                                      {Math.round((gpaData.completedCredits / 120) * 100)}% to graduation
+                                    </p>
                                   </div>
-                                );
-                              })}
-                            </div>
-                            <p className="text-sm text-gray-600 mt-4">
-                              Total: 0/120 credits completed
-                            </p>
-                          </div>
+                                  <RequirementsBreakdown 
+                                    semesters={selectedPlan.semesters}
+                                    trigger={
+                                      <Button variant="outline" className="w-full gap-2 hover:bg-purple-50 hover:border-purple-300">
+                                        <BookOpen className="w-4 h-4" />
+                                        View Detailed Breakdown
+                                      </Button>
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* AI Insights */}
                           <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-6 border border-indigo-200">
@@ -541,6 +712,15 @@ export default function App() {
                   careerGoal={userProfile.careerGoal}
                   userName={userProfile.name}
                   major={userProfile.major}
+                  completedCourses={selectedPlan.semesters
+                    .flatMap((s: SemesterPlan) => s.courses)
+                    .filter((c: PlannedCourse) => c.completed)
+                    .map((c: PlannedCourse) => c.code)}
+                  currentSemester={selectedPlan.semesters.findIndex((s: SemesterPlan) => 
+                    s.courses.some((c: PlannedCourse) => !c.completed)
+                  ) + 1 || 1}
+                  existingCoursesInSemester={selectedPlan.semesters[selectedSemesterIndex]?.courses.map((c: PlannedCourse) => c.code) || []}
+                  onScheduleGenerated={handleScheduleGenerated}
                 />
               </div>
 
@@ -567,7 +747,15 @@ export default function App() {
               <CourseDetailModal
                 course={selectedCourse}
                 careerGoal={userProfile.careerGoal}
-                onClose={() => setSelectedCourse(null)}
+                onClose={() => {
+                  setSelectedCourse(null);
+                  // Reopen schedule preview if it was open before viewing course details
+                  if (shouldReopenSchedulePreview) {
+                    setShouldReopenSchedulePreview(false);
+                    // Small delay for smooth transition between modals
+                    setTimeout(() => setIsSchedulePreviewOpen(true), 150);
+                  }
+                }}
               />
             )}
 
@@ -577,6 +765,23 @@ export default function App() {
               onOpenChange={setIsProfileEditOpen}
               profile={userProfile}
               onProfileUpdate={handleProfileUpdate}
+            />
+
+            {/* Schedule Preview Modal */}
+            <SchedulePreviewModal
+              open={isSchedulePreviewOpen}
+              onOpenChange={setIsSchedulePreviewOpen}
+              generatedSchedule={generatedSchedule}
+              reasoning={scheduleReasoning}
+              availableSemesters={getAvailableSemesters()}
+              onApplySchedule={handleApplySchedule}
+              onCourseClick={(course) => {
+                // Close schedule preview temporarily and mark to reopen after course detail closes
+                setIsSchedulePreviewOpen(false);
+                setShouldReopenSchedulePreview(true);
+                // Small delay for smooth transition between modals
+                setTimeout(() => setSelectedCourse(course), 150);
+              }}
             />
           </div>
         </DndProvider>

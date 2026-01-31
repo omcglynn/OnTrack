@@ -1,24 +1,47 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
-import { Input } from '@/app/components/ui/input';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
-import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
+import { 
+  Send, 
+  Bot, 
+  User, 
+  Sparkles, 
+  Loader2, 
+  AlertCircle, 
+  Calendar,
+  X 
+} from 'lucide-react';
+import { sendMessageWithCodeExecution, generateScheduleRecommendation, AIScheduleRecommendation } from '@/app/lib/gemini';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  type?: 'normal' | 'schedule-generation';
+  scheduleData?: AIScheduleRecommendation;
 }
 
 interface AIChatbotProps {
   careerGoal?: string;
   userName?: string;
   major?: string;
+  completedCourses?: string[];
+  currentSemester?: number;
+  existingCoursesInSemester?: string[];
+  onScheduleGenerated?: (recommendation: AIScheduleRecommendation) => void;
 }
 
-export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
+export function AIChatbot({ 
+  careerGoal, 
+  userName, 
+  major, 
+  completedCourses, 
+  currentSemester,
+  existingCoursesInSemester = [],
+  onScheduleGenerated 
+}: AIChatbotProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -29,7 +52,22 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isScheduleMode, setIsScheduleMode] = useState(false);
+  const [schedulePrompt, setSchedulePrompt] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea up to 4 lines
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const maxHeight = 96;
+      const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, []);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -38,68 +76,16 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
     }
   }, [messages]);
 
-  // Generate AI response based on user input
-  const generateResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-
-    // Course recommendations
-    if (lowerMessage.includes('course') || lowerMessage.includes('class') || lowerMessage.includes('take')) {
-      if (lowerMessage.includes('next') || lowerMessage.includes('recommend')) {
-        return `Based on your ${careerGoal || 'career'} goals, I recommend focusing on courses that build both technical depth and practical skills. Here are some key areas:\n\n• Advanced algorithms and data structures for problem-solving\n• Web/mobile development for building portfolios\n• Database management for backend skills\n• Machine learning if interested in AI\n\nWould you like specific course suggestions for next semester?`;
-      }
-      if (lowerMessage.includes('machine learning') || lowerMessage.includes('ml') || lowerMessage.includes('ai')) {
-        return `Great choice! For machine learning, I recommend this path:\n\n1. **CIS 3715** - Principles of Data Science (prerequisite)\n2. **CIS 4909** - Machine Learning (advanced)\n\nThese courses will give you hands-on experience with Python, TensorFlow, and real-world ML projects. They're highly relevant for ${careerGoal || 'tech careers'}!`;
-      }
-      if (lowerMessage.includes('web') || lowerMessage.includes('frontend') || lowerMessage.includes('react')) {
-        return `For web development, check out **CIS 4398 - Web Application Development**! It covers:\n\n• React and modern JavaScript\n• Node.js backend\n• Full-stack project experience\n• RESTful API design\n\nThis course has a 100% career relevance score for Full Stack Developer roles and will help build your portfolio.`;
-      }
-    }
-
-    // Career advice
-    if (lowerMessage.includes('career') || lowerMessage.includes('job') || lowerMessage.includes('internship')) {
-      return `For ${careerGoal || 'your career goals'}, here's my advice:\n\n**Build Your Foundation:**\n• Master data structures & algorithms\n• Complete 2-3 substantial projects\n• Contribute to open source\n\n**Get Experience:**\n• Apply for internships in junior/senior year\n• Join hackathons and coding competitions\n• Network at career fairs\n\n**Technical Skills:**\n• Learn industry-standard tools\n• Build a strong GitHub portfolio\n• Practice coding interviews\n\nWant specific tips for ${careerGoal || 'your field'}?`;
-    }
-
-    // Prerequisites and planning
-    if (lowerMessage.includes('prerequisite') || lowerMessage.includes('prereq') || lowerMessage.includes('before')) {
-      return `Prerequisites are important for course planning! Here's how to check them:\n\n• Each course card shows required prerequisites\n• Take them in sequence for best understanding\n• Some courses have co-requisites (can take together)\n\nFor example, CIS 2168 (Data Structures) requires both CIS 1057 and CIS 2033. Need help planning a specific sequence?`;
-    }
-
-    // Difficulty and workload
-    if (lowerMessage.includes('difficult') || lowerMessage.includes('hard') || lowerMessage.includes('workload') || lowerMessage.includes('easy')) {
-      return `Course difficulty varies by person, but here's my general advice:\n\n**Difficulty Levels:**\n• 1-2: Introductory, manageable workload\n• 3: Moderate, requires consistent effort\n• 4-5: Challenging, time-intensive\n\n**Balancing Your Load:**\n• Mix difficult and easier courses each semester\n• Don't overload during internship prep\n• Consider prerequisites and time management\n\nWhich specific course difficulty are you concerned about?`;
-    }
-
-    // GPA and grades
-    if (lowerMessage.includes('gpa') || lowerMessage.includes('grade')) {
-      return `Maintaining a strong GPA is important! Here are some tips:\n\n• Start strong in foundational courses\n• Attend office hours regularly\n• Form study groups\n• Balance difficulty across semesters\n• Don't overload your schedule\n\nFor ${careerGoal || 'tech roles'}, many companies look for 3.0+ GPA, but practical skills and projects matter more. Focus on learning and building!`;
-    }
-
-    // Study tips
-    if (lowerMessage.includes('study') || lowerMessage.includes('prepare') || lowerMessage.includes('tips')) {
-      return `Here are my top study tips for CS students:\n\n**Code Daily:**\n• Practice on LeetCode/HackerRank\n• Build personal projects\n• Review course material regularly\n\n**Learn Actively:**\n• Don't just read—implement!\n• Teach concepts to others\n• Debug your own code\n\n**Resources:**\n• Use office hours\n• Join study groups\n• YouTube tutorials for tough concepts\n\nWhat subject do you need help with?`;
-    }
-
-    // Schedule and planning
-    if (lowerMessage.includes('schedule') || lowerMessage.includes('plan') || lowerMessage.includes('semester')) {
-      return `Smart scheduling is key to success! Here's my approach:\n\n**Balanced Semester:**\n• Mix 2-3 major courses with 1-2 gen-eds\n• Aim for 15-16 credits typically\n• Leave room for clubs/projects\n\n**Before Internships:**\n• Take slightly lighter loads\n• Focus on interview prep\n• Build portfolio projects\n\nYour current plan is optimized for ${careerGoal || 'your goals'}. Want to adjust anything?`;
-    }
-
-    // Default responses
-    const defaultResponses = [
-      `That's a great question! For ${careerGoal || major || 'Computer Science'} students, I'd be happy to help. Could you be more specific about what you'd like to know? I can assist with:\n\n• Course recommendations and planning\n• Career advice and internships\n• Prerequisites and degree requirements\n• Study tips and resources`,
-      
-      `I'm here to help with your academic journey! Some things I can help with:\n\n• Finding courses for ${careerGoal || 'your career path'}\n• Understanding prerequisites\n• Planning your semester schedule\n• Career preparation tips\n\nWhat specific area interests you?`,
-      
-      `Thanks for your question! As your AI advisor, I can provide guidance on courses, career planning, and academic success. What aspect of your ${major || 'Computer Science'} journey would you like to explore?`,
-    ];
-
-    return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
-  };
+  // Adjust textarea height when input changes
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
 
   const handleSend = async (messageText?: string) => {
     const textToSend = messageText || input.trim();
     if (!textToSend || isLoading) return;
+
+    setError(null);
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -112,26 +98,117 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
     setInput('');
     setIsLoading(true);
 
-    // Simulate AI thinking time
-    setTimeout(() => {
+    try {
+      const historyForApi = messages
+        .slice(1)
+        .filter(msg => msg.type !== 'schedule-generation')
+        .map(msg => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+      const response = await sendMessageWithCodeExecution(
+        textToSend,
+        historyForApi,
+        { userName, major, careerGoal, completedCourses, currentSemester }
+      );
+
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: generateResponse(userMessage.content),
+        content: response,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiResponse]);
+    } catch (err) {
+      console.error('AI response error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to get AI response';
+      setError(errorMessage);
+      
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `I'm sorry, I encountered an error: ${errorMessage}. Please try again.`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
       setIsLoading(false);
-    }, 1000 + Math.random() * 1000);
+    }
+  };
+
+  const handleGenerateSchedule = async () => {
+    if (!schedulePrompt.trim() || isLoading) return;
+
+    setError(null);
+    setIsLoading(true);
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: `🗓️ Generate Schedule: "${schedulePrompt}"`,
+      timestamp: new Date(),
+      type: 'schedule-generation',
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+
+    try {
+      const recommendation = await generateScheduleRecommendation(
+        { userName, major, careerGoal, completedCourses, currentSemester },
+        { 
+          prompt: schedulePrompt, 
+          targetCredits: 15,
+          existingCoursesInSemester 
+        }
+      );
+
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `✨ I've generated a schedule for you!\n\n**Selected Courses (${recommendation.totalCredits} credits):**\n${recommendation.courseCodes.map(c => `• ${c}`).join('\n')}\n\n**Reasoning:** ${recommendation.reasoning}`,
+        timestamp: new Date(),
+        type: 'schedule-generation',
+        scheduleData: recommendation,
+      };
+      
+      setMessages(prev => [...prev, aiResponse]);
+      
+      // Notify parent to open the preview modal
+      if (onScheduleGenerated) {
+        onScheduleGenerated(recommendation);
+      }
+      
+      // Reset schedule mode
+      setSchedulePrompt('');
+      setIsScheduleMode(false);
+    } catch (err) {
+      console.error('Schedule generation error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate schedule';
+      setError(errorMessage);
+      
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `I couldn't generate a schedule: ${errorMessage}. Please try again with different criteria.`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (isScheduleMode) {
+        handleGenerateSchedule();
+      } else {
+        handleSend();
+      }
     }
   };
-
 
   return (
     <div className="w-96 bg-white border-l shadow-sm flex flex-col h-full overflow-hidden">
@@ -145,16 +222,24 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
             <h2 className="font-bold text-lg">AI Advisor</h2>
             <div className="flex items-center gap-1 text-xs text-purple-100">
               <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span>Online</span>
+              <span>Powered by Gemini</span>
             </div>
           </div>
           <Sparkles className="w-5 h-5 text-yellow-300" />
         </div>
       </div>
 
+      {/* Error Banner */}
+      {error && (
+        <div className="p-2 bg-red-50 border-b border-red-200 flex items-center gap-2 text-red-700 text-sm">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{error}</span>
+        </div>
+      )}
+
       {/* Messages */}
-      <ScrollArea className="flex-1 min-h-0 p-4">
-        <div className="space-y-4">
+      <ScrollArea className="flex-1 min-h-0 p-4 overflow-x-hidden">
+        <div className="space-y-4 max-w-full">
           {messages.map((message) => (
             <div
               key={message.id}
@@ -172,14 +257,27 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
                 )}
               </div>
               
-              <Card className={`flex-1 p-3 ${
+              <Card className={`flex-1 min-w-0 p-3 overflow-hidden ${
                 message.role === 'user' 
                   ? 'bg-blue-50 border-blue-200' 
-                  : 'bg-white'
+                  : message.type === 'schedule-generation'
+                    ? 'bg-purple-50 border-purple-200'
+                    : 'bg-white'
               }`}>
-                <p className="text-sm whitespace-pre-line leading-relaxed">
+                <p className="text-sm whitespace-pre-line leading-relaxed break-words overflow-wrap-anywhere">
                   {message.content}
                 </p>
+                {/* View Schedule Button for schedule generation responses */}
+                {message.type === 'schedule-generation' && message.scheduleData && onScheduleGenerated && (
+                  <Button
+                    size="sm"
+                    className="mt-3 w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                    onClick={() => onScheduleGenerated(message.scheduleData!)}
+                  >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    View Generated Schedule
+                  </Button>
+                )}
                 <p className="text-xs text-gray-400 mt-2">
                   {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
@@ -192,36 +290,95 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center flex-shrink-0">
                 <Bot className="w-5 h-5 text-white" />
               </div>
-              <Card className="flex-1 p-3">
+              <Card className="flex-1 min-w-0 p-3 overflow-hidden">
                 <div className="flex items-center gap-2 text-gray-500">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">AI is thinking...</span>
+                  <span className="text-sm">
+                    {isScheduleMode ? 'Generating schedule...' : 'AI is thinking...'}
+                  </span>
                 </div>
               </Card>
             </div>
           )}
           
-          {/* Invisible div for scroll anchor */}
           <div ref={scrollRef} />
         </div>
       </ScrollArea>
 
+      {/* Schedule Generation Mode */}
+      {isScheduleMode && (
+        <div className="p-3 border-t bg-purple-50 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-purple-700 flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Generate Schedule
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setIsScheduleMode(false)}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+          <textarea
+            placeholder="Describe your ideal schedule... (e.g., 'Focus on cybersecurity with 15 credits')"
+            value={schedulePrompt}
+            onChange={(e) => setSchedulePrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isLoading}
+            rows={2}
+            className="w-full resize-none rounded-md border border-purple-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+          />
+          <Button
+            onClick={handleGenerateSchedule}
+            disabled={!schedulePrompt.trim() || isLoading}
+            className="w-full mt-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+          >
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            ) : (
+              <Sparkles className="w-4 h-4 mr-2" />
+            )}
+            Generate Schedule
+          </Button>
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-4 border-t bg-gray-50 flex-shrink-0">
-        <div className="flex gap-2">
-          <Input
+        {/* Generate Schedule Button */}
+        {!isScheduleMode && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full mb-3 border-purple-300 text-purple-700 hover:bg-purple-50"
+            onClick={() => setIsScheduleMode(true)}
+            disabled={isLoading}
+          >
+            <Calendar className="w-4 h-4 mr-2" />
+            Generate Schedule with AI
+          </Button>
+        )}
+        
+        <div className="flex gap-2 items-end">
+          <textarea
+            ref={textareaRef}
             placeholder="Ask me anything..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={isLoading}
-            className="flex-1"
+            disabled={isLoading || isScheduleMode}
+            rows={1}
+            className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 overflow-y-auto"
+            style={{ minHeight: '40px', maxHeight: '96px' }}
           />
           <Button
             onClick={() => handleSend()}
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || isScheduleMode}
             size="icon"
-            className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+            className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 flex-shrink-0"
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />

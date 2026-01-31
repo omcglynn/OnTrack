@@ -15,7 +15,6 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -42,9 +41,6 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
           email,
           password,
           options: {
-            data: {
-              name,
-            },
             emailRedirectTo: window.location.origin,
           },
         });
@@ -148,21 +144,6 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
           </div>
 
           <form onSubmit={handleAuth} className="space-y-4">
-            {!isLogin && (
-              <div>
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="John Doe"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required={!isLogin}
-                  disabled={loading}
-                />
-              </div>
-            )}
-
             <div>
               <Label htmlFor="email">Email</Label>
               <Input

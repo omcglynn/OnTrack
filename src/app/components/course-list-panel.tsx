@@ -4,8 +4,9 @@ import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { Input } from '@/app/components/ui/input';
 import { Badge } from '@/app/components/ui/badge';
 import { Card } from '@/app/components/ui/card';
-import { Search, BookOpen, Star, TrendingUp } from 'lucide-react';
+import { Search, BookOpen, Star, TrendingUp, Clock, MapPin } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
+import { getCourseSchedule, formatScheduleShort } from '@/app/utils/schedule-utils';
 
 interface CourseListPanelProps {
   onCourseClick?: (course: Course) => void;
@@ -40,9 +41,10 @@ export function CourseListPanel({ onCourseClick, careerGoal }: CourseListPanelPr
     : filteredCourses;
 
   const categories = [
-    { id: 'all', label: 'All Courses', count: COURSES.length },
-    { id: 'major', label: 'Major', count: COURSES.filter(c => c.category === 'major').length },
-    { id: 'core', label: 'Core', count: COURSES.filter(c => c.category === 'core').length },
+    { id: 'all', label: 'All', count: COURSES.length },
+    { id: 'major', label: 'CIS Core', count: COURSES.filter(c => c.category === 'major').length },
+    { id: 'core', label: 'Math', count: COURSES.filter(c => c.category === 'core').length },
+    { id: 'lab-science', label: 'Lab Sci', count: COURSES.filter(c => c.category === 'lab-science').length },
     { id: 'elective', label: 'Elective', count: COURSES.filter(c => c.category === 'elective').length },
     { id: 'gen-ed', label: 'Gen Ed', count: COURSES.filter(c => c.category === 'gen-ed').length },
   ];
@@ -97,6 +99,7 @@ export function CourseListPanel({ onCourseClick, careerGoal }: CourseListPanelPr
             sortedCourses.map((course) => {
               const relevanceScore = getRelevanceScore(course);
               const isHighRelevance = relevanceScore >= 80;
+              const schedule = getCourseSchedule(course);
               
               return (
                 <Card
@@ -106,7 +109,9 @@ export function CourseListPanel({ onCourseClick, careerGoal }: CourseListPanelPr
                     borderLeftColor: 
                       course.category === 'major' ? '#9333ea' :
                       course.category === 'core' ? '#3b82f6' :
+                      course.category === 'lab-science' ? '#06b6d4' :
                       course.category === 'elective' ? '#10b981' :
+                      course.category === 'gen-ed' ? '#f59e0b' :
                       '#6b7280'
                   }}
                   onClick={() => onCourseClick?.(course)}
@@ -133,6 +138,18 @@ export function CourseListPanel({ onCourseClick, careerGoal }: CourseListPanelPr
                     </Badge>
                   </div>
 
+                  {/* Schedule Info */}
+                  <div className="flex items-center gap-3 mb-2 text-xs text-gray-500">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      <span>{formatScheduleShort(schedule)}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      <span className="truncate max-w-[80px]">{schedule.location.split(' ')[0]}</span>
+                    </div>
+                  </div>
+
                   <p className="text-xs text-gray-600 line-clamp-2 mb-2">
                     {course.description}
                   </p>
@@ -142,7 +159,7 @@ export function CourseListPanel({ onCourseClick, careerGoal }: CourseListPanelPr
                       variant="outline" 
                       className="text-xs capitalize"
                     >
-                      {course.category}
+                      {course.category.replace('-', ' ')}
                     </Badge>
                     
                     {careerGoal && relevanceScore > 0 && (

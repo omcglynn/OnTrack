@@ -1,430 +1,444 @@
 import { Course, COURSES } from '@/app/data/mock-courses';
-import { SemesterPlan } from '@/app/components/roadmap-view';
+import { SemesterPlan, PlannedCourse } from '@/app/components/roadmap-view';
 import { UserProfile } from '@/app/components/onboarding';
 
-export interface Plan {
-  id: string;
-  name: string;
-  description: string;
-  semesters: SemesterPlan[];
-  highlights: string[];
-  bestFor: string;
-}
-
-// Helper function to safely get a course by code
-function getCourse(code: string): Course {
+// Helper to safely get a course, returns a placeholder if not found
+function getCourse(code: string, options?: { completed?: boolean; grade?: string; inProgress?: boolean }): PlannedCourse {
   const course = COURSES.find(c => c.code === code);
   if (!course) {
     console.warn(`Course not found: ${code}`);
-    // Return a placeholder course to prevent crashes
     return {
       id: `missing-${code}`,
-      code,
-      name: `${code} (Not Found)`,
+      code: code,
+      name: `Course ${code}`,
       credits: 3,
-      description: 'Course data not available',
-      category: 'major',
+      description: 'Course not found',
+      category: 'elective',
+      careerRelevance: {},
+      skills: [],
+      difficulty: 3,
+      ...options,
     };
   }
-  return course;
+  return { ...course, ...options };
 }
 
-export function generatePlans(profile: UserProfile): Plan[] {
-  return [
+// Generate realistic grades for a completed course
+function generateGrade(difficulty?: number): string {
+  const grades = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'];
+  const weights = difficulty && difficulty >= 4 
+    ? [10, 15, 25, 25, 15, 7, 3] // Harder courses = more B's
+    : [25, 25, 20, 15, 10, 3, 2]; // Easier courses = more A's
+  
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let random = Math.random() * totalWeight;
+  
+  for (let i = 0; i < grades.length; i++) {
+    random -= weights[i];
+    if (random <= 0) return grades[i];
+  }
+  return 'B';
+}
+
+export function generatePlans(profile: UserProfile) {
+  const allPlans = [
     generateBalancedPlan(profile),
-    generateFastTrackPlan(profile),
-    generateInternshipHeavyPlan(profile),
+    generateCybersecurityPlan(profile),
+    generateForensicsPlan(profile),
   ];
+
+  return allPlans;
 }
 
-function generateBalancedPlan(profile: UserProfile): Plan {
+function generateBalancedPlan(profile: UserProfile): any {
   const semesters: SemesterPlan[] = [];
   
-  // Year 1 Fall
+  // Year 1 Fall - COMPLETED
+  const y1FallCourses = [
+    getCourse('CIS 1001', { completed: true, grade: 'A' }),
+    getCourse('CIS 1051', { completed: true, grade: 'A-' }),
+    getCourse('MATH 1041', { completed: true, grade: 'B+' }),
+    getCourse('ENG 0802', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 1,
     season: 'Fall',
     year: 1,
-    courses: [
-      getCourse('CIS 1051'),
-      getCourse('MATH 1041'),
-      getCourse('ENGL 0802'),
-      getCourse('GEN 1001'),
-    ],
-    totalCredits: 11,
+    courses: y1FallCourses,
+    totalCredits: y1FallCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 1 Spring
+  // Year 1 Spring - COMPLETED
+  const y1SpringCourses = [
+    getCourse('CIS 1068', { completed: true, grade: 'B+' }),
+    getCourse('CIS 1166', { completed: true, grade: 'B' }),
+    getCourse('MATH 1042', { completed: true, grade: 'B+' }),
+    getCourse('MOSAIC 0851', { completed: true, grade: 'A-' }),
+  ];
   semesters.push({
     semester: 2,
     season: 'Spring',
     year: 1,
-    courses: [
-      getCourse('CIS 1057'),
-      getCourse('MATH 1042'),
-      getCourse('PHYS 1061'),
-      getCourse('HIST 2051'),
-    ],
-    totalCredits: 14,
+    courses: y1SpringCourses,
+    totalCredits: y1SpringCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 2 Fall
+  // Year 2 Fall - COMPLETED
+  const y2FallCourses = [
+    getCourse('CIS 2107', { completed: true, grade: 'B+' }),
+    getCourse('CIS 2168', { completed: true, grade: 'B' }),
+    getCourse('CIS 2033', { completed: true, grade: 'A-' }),
+    getCourse('MOSAIC 0852', { completed: true, grade: 'A' }),
+    getCourse('PSY 1001', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 3,
     season: 'Fall',
     year: 2,
-    courses: [
-      getCourse('CIS 2033'),
-      getCourse('CIS 2107'),
-      getCourse('CIS 2168'),
-      getCourse('STAT 2103'),
-    ],
-    totalCredits: 12,
+    courses: y2FallCourses,
+    totalCredits: y2FallCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 2 Spring
+  // Year 2 Spring - COMPLETED
+  const y2SpringCourses = [
+    getCourse('CIS 2166', { completed: true, grade: 'B' }),
+    getCourse('CIS 3207', { completed: true, grade: 'B-' }),
+    getCourse('PHYS 1061', { completed: true, grade: 'B+' }),
+    getCourse('CJ 1001', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 4,
     season: 'Spring',
     year: 2,
-    courses: [
-      getCourse('CIS 3207'),
-      getCourse('CIS 3223'),
-      getCourse('CIS 3296'),
-      getCourse('ECON 1101'),
-    ],
-    totalCredits: 12,
+    courses: y2SpringCourses,
+    totalCredits: y2SpringCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 3 Fall
+  // Year 3 Fall - IN PROGRESS (Current Semester)
+  const y3FallCourses = [
+    getCourse('CIS 3223', { inProgress: true }),
+    getCourse('CIS 3296', { inProgress: true }),
+    getCourse('CIS 3605', { inProgress: true }),
+    getCourse('PHYS 1062', { inProgress: true }),
+  ];
   semesters.push({
     semester: 5,
     season: 'Fall',
     year: 3,
-    courses: [
-      getCourse('CIS 3309'),
-      getCourse('CIS 3715'),
-      getCourse('CIS 4360'),
-      getCourse('CIS 4398'),
-    ],
-    totalCredits: 12,
+    courses: y3FallCourses,
+    totalCredits: y3FallCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'in-progress',
   });
 
-  // Year 3 Spring (Internship semester)
-  const isInternshipSemester = profile.internshipPreference === 'summer-year3';
+  // Year 3 Spring - UNPLANNED
   semesters.push({
     semester: 6,
     season: 'Spring',
     year: 3,
-    courses: [
-      getCourse('CIS 3800'),
-      getCourse('CIS 4526'),
-      getCourse('PHIL 2101'),
-    ],
-    totalCredits: 9,
-    isInternshipSemester,
+    courses: [],
+    totalCredits: 0,
+    status: 'unplanned',
+    isInternshipSemester: true,
   });
 
-  // Year 4 Fall
+  // Year 4 Fall - UNPLANNED
   semesters.push({
     semester: 7,
     season: 'Fall',
     year: 4,
-    courses: [
-      getCourse('CIS 4515'),
-      getCourse('CIS 4909'),
-      getCourse('CIS 4396'),
-      getCourse('CIS 4301'),
-    ],
-    totalCredits: 12,
+    courses: [],
+    totalCredits: 0,
+    status: 'unplanned',
   });
 
-  // Year 4 Spring
+  // Year 4 Spring - UNPLANNED
   semesters.push({
     semester: 8,
     season: 'Spring',
     year: 4,
-    courses: [
-      getCourse('CIS 4997'),
-      getCourse('CIS 4555'),
-      getCourse('CIS 4528'),
-      getCourse('ART 2101'),
-    ],
-    totalCredits: 12,
+    courses: [],
+    totalCredits: 0,
+    status: 'unplanned',
   });
 
   return {
     id: 'balanced',
     name: 'Balanced Plan',
-    description: 'Steady progress with flexibility for exploration',
+    description: 'Steady progress with flexibility for cybersecurity exploration',
     semesters,
     highlights: [
-      'Manageable 12-14 credit semesters',
-      'Time for extracurriculars and networking',
+      'Manageable 12-17 credit semesters',
+      'Core security courses in Year 3-4',
       'Lighter spring semester before summer internship',
-      'Diverse elective choices in final year',
+      'Psychology courses for social engineering understanding',
     ],
-    bestFor: 'Students who want a well-rounded college experience with time for clubs, research, or part-time work',
+    bestFor: 'Students who want a well-rounded cybersecurity education with time for clubs, research, or part-time work',
   };
 }
 
-function generateFastTrackPlan(profile: UserProfile): Plan {
+function generateCybersecurityPlan(profile: UserProfile): any {
   const semesters: SemesterPlan[] = [];
   
-  // Year 1 Fall - Heavy load
+  // Year 1 Fall - COMPLETED
+  const y1FallCourses = [
+    getCourse('CIS 1001', { completed: true, grade: 'A' }),
+    getCourse('CIS 1051', { completed: true, grade: 'A' }),
+    getCourse('MATH 1041', { completed: true, grade: 'B+' }),
+    getCourse('ENG 0802', { completed: true, grade: 'A-' }),
+    getCourse('PSY 1001', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 1,
     season: 'Fall',
     year: 1,
-    courses: [
-      getCourse('CIS 1051'),
-      getCourse('MATH 1041'),
-      getCourse('ENGL 0802'),
-      getCourse('GEN 1001'),
-      getCourse('HIST 2051'),
-    ],
-    totalCredits: 14,
+    courses: y1FallCourses,
+    totalCredits: y1FallCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 1 Spring
+  // Year 1 Spring - COMPLETED
+  const y1SpringCourses = [
+    getCourse('CIS 1068', { completed: true, grade: 'A-' }),
+    getCourse('CIS 1166', { completed: true, grade: 'B+' }),
+    getCourse('MATH 1042', { completed: true, grade: 'B' }),
+    getCourse('MOSAIC 0851', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 2,
     season: 'Spring',
     year: 1,
-    courses: [
-      getCourse('CIS 1057'),
-      getCourse('MATH 1042'),
-      getCourse('PHYS 1061'),
-      getCourse('STAT 2103'),
-    ],
-    totalCredits: 14,
+    courses: y1SpringCourses,
+    totalCredits: y1SpringCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 2 Fall
+  // Year 2 Fall - COMPLETED
+  const y2FallCourses = [
+    getCourse('CIS 2107', { completed: true, grade: 'A-' }),
+    getCourse('CIS 2168', { completed: true, grade: 'B+' }),
+    getCourse('CIS 2033', { completed: true, grade: 'A' }),
+    getCourse('MOSAIC 0852', { completed: true, grade: 'A-' }),
+    getCourse('PHIL 1003', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 3,
     season: 'Fall',
     year: 2,
-    courses: [
-      getCourse('CIS 2033'),
-      getCourse('CIS 2107'),
-      getCourse('CIS 2168'),
-      getCourse('CIS 3207'),
-      getCourse('ECON 1101'),
-    ],
-    totalCredits: 15,
+    courses: y2FallCourses,
+    totalCredits: y2FallCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 2 Spring - Lighter for early internship
+  // Year 2 Spring - COMPLETED
+  const y2SpringCourses = [
+    getCourse('CIS 2166', { completed: true, grade: 'B+' }),
+    getCourse('CIS 3207', { completed: true, grade: 'B' }),
+    getCourse('CIS 3308', { completed: true, grade: 'A-' }),
+    getCourse('CJ 1001', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 4,
     season: 'Spring',
     year: 2,
-    courses: [
-      getCourse('CIS 3223'),
-      getCourse('CIS 3296'),
-      getCourse('PHIL 2101'),
-    ],
-    totalCredits: 9,
-    isInternshipSemester: true,
+    courses: y2SpringCourses,
+    totalCredits: y2SpringCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 3 Fall
+  // Year 3 Fall - IN PROGRESS (Current Semester)
+  const y3FallCourses = [
+    getCourse('CIS 3223', { inProgress: true }),
+    getCourse('CIS 3296', { inProgress: true }),
+    getCourse('CIS 3441', { inProgress: true }),
+    getCourse('CIS 3319', { inProgress: true }),
+    getCourse('PHYS 1061', { inProgress: true }),
+  ];
   semesters.push({
     semester: 5,
     season: 'Fall',
     year: 3,
-    courses: [
-      getCourse('CIS 3309'),
-      getCourse('CIS 3715'),
-      getCourse('CIS 4360'),
-      getCourse('CIS 4398'),
-      getCourse('CIS 4515'),
-    ],
-    totalCredits: 15,
+    courses: y3FallCourses,
+    totalCredits: y3FallCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'in-progress',
   });
 
-  // Year 3 Spring
+  // Year 3 Spring - UNPLANNED
   semesters.push({
     semester: 6,
     season: 'Spring',
     year: 3,
-    courses: [
-      getCourse('CIS 3800'),
-      getCourse('CIS 4526'),
-      getCourse('CIS 4909'),
-      getCourse('CIS 4396'),
-    ],
-    totalCredits: 12,
+    courses: [],
+    totalCredits: 0,
+    status: 'unplanned',
   });
 
-  // Year 4 Fall
+  // Year 4 Fall - UNPLANNED
   semesters.push({
     semester: 7,
     season: 'Fall',
     year: 4,
-    courses: [
-      getCourse('CIS 4301'),
-      getCourse('CIS 4997'),
-      getCourse('CIS 4555'),
-    ],
-    totalCredits: 9,
+    courses: [],
+    totalCredits: 0,
+    status: 'unplanned',
   });
 
-  // Year 4 Spring - Light final semester
+  // Year 4 Spring - UNPLANNED
   semesters.push({
     semester: 8,
     season: 'Spring',
     year: 4,
-    courses: [
-      getCourse('CIS 4528'),
-      getCourse('ART 2101'),
-    ],
-    totalCredits: 6,
+    courses: [],
+    totalCredits: 0,
+    status: 'unplanned',
   });
 
   return {
-    id: 'fast-track',
-    name: 'Fast Track',
-    description: 'Graduate with advanced skills and early specialization',
+    id: 'cybersecurity',
+    name: 'Cybersecurity Focus',
+    description: 'Specialized path for offensive and defensive security careers',
     semesters,
     highlights: [
-      'Early internship after sophomore year',
-      'Front-loaded major courses',
-      'Light senior year for job search',
-      'Build strong technical portfolio early',
+      'Early systems and networking courses',
+      'All core security electives included',
+      'Psychology for social engineering defense',
+      'Legal foundation for ethical practice',
     ],
-    bestFor: 'Motivated students who want to enter the workforce quickly or pursue graduate school',
+    bestFor: 'Students targeting SOC analyst, penetration tester, or security engineer roles',
   };
 }
 
-function generateInternshipHeavyPlan(profile: UserProfile): Plan {
+function generateForensicsPlan(profile: UserProfile): any {
   const semesters: SemesterPlan[] = [];
   
-  // Year 1 Fall
+  // Year 1 Fall - COMPLETED
+  const y1FallCourses = [
+    getCourse('CIS 1001', { completed: true, grade: 'A' }),
+    getCourse('CIS 1051', { completed: true, grade: 'A-' }),
+    getCourse('MATH 1041', { completed: true, grade: 'B+' }),
+    getCourse('CJ 1001', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 1,
     season: 'Fall',
     year: 1,
-    courses: [
-      getCourse('CIS 1051'),
-      getCourse('MATH 1041'),
-      getCourse('ENGL 0802'),
-      getCourse('GEN 1001'),
-    ],
-    totalCredits: 11,
+    courses: y1FallCourses,
+    totalCredits: y1FallCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 1 Spring
+  // Year 1 Spring - COMPLETED
+  const y1SpringCourses = [
+    getCourse('CIS 1068', { completed: true, grade: 'B+' }),
+    getCourse('CIS 1166', { completed: true, grade: 'B' }),
+    getCourse('MATH 1042', { completed: true, grade: 'B' }),
+    getCourse('ENG 0802', { completed: true, grade: 'A' }),
+    getCourse('CJ 2101', { completed: true, grade: 'A-' }),
+  ];
   semesters.push({
     semester: 2,
     season: 'Spring',
     year: 1,
-    courses: [
-      getCourse('CIS 1057'),
-      getCourse('MATH 1042'),
-      getCourse('PHYS 1061'),
-      getCourse('HIST 2051'),
-    ],
-    totalCredits: 14,
+    courses: y1SpringCourses,
+    totalCredits: y1SpringCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 2 Fall
+  // Year 2 Fall - COMPLETED
+  const y2FallCourses = [
+    getCourse('CIS 2107', { completed: true, grade: 'B+' }),
+    getCourse('CIS 2168', { completed: true, grade: 'B' }),
+    getCourse('CIS 2033', { completed: true, grade: 'A-' }),
+    getCourse('MOSAIC 0851', { completed: true, grade: 'A' }),
+    getCourse('PSY 1001', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 3,
     season: 'Fall',
     year: 2,
-    courses: [
-      getCourse('CIS 2033'),
-      getCourse('CIS 2107'),
-      getCourse('CIS 2168'),
-      getCourse('STAT 2103'),
-      getCourse('ECON 1101'),
-    ],
-    totalCredits: 15,
+    courses: y2FallCourses,
+    totalCredits: y2FallCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 2 Spring - Internship prep
+  // Year 2 Spring - COMPLETED
+  const y2SpringCourses = [
+    getCourse('CIS 2166', { completed: true, grade: 'B' }),
+    getCourse('CIS 3207', { completed: true, grade: 'B-' }),
+    getCourse('MOSAIC 0852', { completed: true, grade: 'A-' }),
+    getCourse('CJ 3201', { completed: true, grade: 'A' }),
+  ];
   semesters.push({
     semester: 4,
     season: 'Spring',
     year: 2,
-    courses: [
-      getCourse('CIS 3207'),
-      getCourse('CIS 3223'),
-      getCourse('CIS 3296'),
-    ],
-    totalCredits: 9,
-    isInternshipSemester: true,
+    courses: y2SpringCourses,
+    totalCredits: y2SpringCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'completed',
   });
 
-  // Year 3 Fall
+  // Year 3 Fall - IN PROGRESS (Current Semester)
+  const y3FallCourses = [
+    getCourse('CIS 3223', { inProgress: true }),
+    getCourse('CIS 3296', { inProgress: true }),
+    getCourse('CIS 3605', { inProgress: true }),
+    getCourse('CJ 3301', { inProgress: true }),
+    getCourse('PHYS 1061', { inProgress: true }),
+  ];
   semesters.push({
     semester: 5,
     season: 'Fall',
     year: 3,
-    courses: [
-      getCourse('CIS 3309'),
-      getCourse('CIS 3715'),
-      getCourse('CIS 4360'),
-      getCourse('CIS 4398'),
-    ],
-    totalCredits: 12,
+    courses: y3FallCourses,
+    totalCredits: y3FallCourses.reduce((sum, c) => sum + c.credits, 0),
+    status: 'in-progress',
   });
 
-  // Year 3 Spring - Second internship
+  // Year 3 Spring - UNPLANNED
   semesters.push({
     semester: 6,
     season: 'Spring',
     year: 3,
-    courses: [
-      getCourse('CIS 3800'),
-      getCourse('PHIL 2101'),
-    ],
-    totalCredits: 6,
+    courses: [],
+    totalCredits: 0,
+    status: 'unplanned',
     isInternshipSemester: true,
   });
 
-  // Year 4 Fall
+  // Year 4 Fall - UNPLANNED
   semesters.push({
     semester: 7,
     season: 'Fall',
     year: 4,
-    courses: [
-      getCourse('CIS 4515'),
-      getCourse('CIS 4909'),
-      getCourse('CIS 4396'),
-      getCourse('CIS 4526'),
-    ],
-    totalCredits: 12,
+    courses: [],
+    totalCredits: 0,
+    status: 'unplanned',
   });
 
-  // Year 4 Spring
+  // Year 4 Spring - UNPLANNED
   semesters.push({
     semester: 8,
     season: 'Spring',
     year: 4,
-    courses: [
-      getCourse('CIS 4997'),
-      getCourse('CIS 4301'),
-      getCourse('CIS 4555'),
-      getCourse('CIS 4528'),
-      getCourse('ART 2101'),
-    ],
-    totalCredits: 15,
+    courses: [],
+    totalCredits: 0,
+    status: 'unplanned',
   });
 
   return {
-    id: 'internship-heavy',
-    name: 'Internship-Focused',
-    description: 'Maximize real-world experience with multiple internships',
+    id: 'forensics',
+    name: 'Digital Forensics Focus',
+    description: 'Specialized path for incident response and forensic investigation careers',
     semesters,
     highlights: [
-      'Two internship-optimized semesters',
-      'Build extensive professional network',
-      'Multiple companies on resume',
-      'Strong practical skills development',
+      'Criminal justice and legal foundation',
+      'Core forensics and investigation courses',
+      'Technical writing for forensic reports',
+      'Data analysis for evidence discovery',
     ],
-    bestFor: 'Career-focused students who want extensive industry experience before graduation',
+    bestFor: 'Students targeting digital forensics, incident response, or law enforcement tech roles',
   };
 }

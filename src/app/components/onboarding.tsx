@@ -3,10 +3,9 @@ import { Button } from '@/app/components/ui/button';
 import { Input } from '@/app/components/ui/input';
 import { Label } from '@/app/components/ui/label';
 import { Textarea } from '@/app/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select';
 import { Card } from '@/app/components/ui/card';
-import { Combobox, ComboboxOption } from '@/app/components/ui/combobox';
-import { ArrowRight, GraduationCap, Target, Calendar, Settings, Loader2 } from 'lucide-react';
+import { Combobox } from '@/app/components/ui/combobox';
+import { ArrowRight, ArrowLeft, GraduationCap, Target, Loader2 } from 'lucide-react';
 import { supabase, University, Major } from '@/app/lib/supabase';
 import { toast } from 'sonner';
 
@@ -25,9 +24,10 @@ export interface UserProfile {
 
 interface OnboardingProps {
   onComplete: (profile: UserProfile) => void;
+  onBack?: () => void;
 }
 
-export function Onboarding({ onComplete }: OnboardingProps) {
+export function Onboarding({ onComplete, onBack }: OnboardingProps) {
   const [step, setStep] = useState(1);
   const [profile, setProfile] = useState<Partial<UserProfile>>({
     maxCreditsPerSemester: 15,
@@ -38,7 +38,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const totalSteps = 4;
+  const totalSteps = 2;
 
   // Fetch universities from database
   useEffect(() => {
@@ -153,10 +153,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         return profile.name && profile.universityId && profile.majorId;
       case 2:
         return profile.careerGoal && profile.careerGoal.trim().length > 0;
-      case 3:
-        return true;
-      case 4:
-        return true;
       default:
         return false;
     }
@@ -188,13 +184,25 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 flex items-center justify-center p-4">
       <Card className="max-w-2xl w-full p-8 bg-white/95 backdrop-blur relative overflow-hidden">
+        {/* Back to landing button */}
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="absolute top-4 left-4 flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            disabled={saving}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to login
+          </button>
+        )}
+
         {/* Progress bar */}
         <div className="mb-8">
           <div className="flex justify-between mb-2">
-            {[1, 2, 3, 4].map((s) => (
+            {[1, 2].map((s) => (
               <div
                 key={s}
-                className={`w-1/4 h-2 mx-1 rounded-full transition-all ${
+                className={`w-1/2 h-2 mx-1 rounded-full transition-all ${
                   s <= step ? 'bg-blue-600' : 'bg-gray-200'
                 }`}
               />
@@ -289,98 +297,6 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               <p className="text-sm text-gray-500 mt-2">
                 Be specific about your interests, target roles, or industries
               </p>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Internship Planning */}
-        {step === 3 && (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <Calendar className="w-16 h-16 mx-auto text-pink-600 mb-4" />
-              <h2 className="text-3xl font-bold mb-2">Plan for internships</h2>
-              <p className="text-gray-600">When do you want to pursue internship opportunities?</p>
-            </div>
-
-            <div className="space-y-3">
-              {[
-                { value: 'summer-year2', label: 'Summer after Sophomore Year', desc: 'Great for first internship experience' },
-                { value: 'summer-year3', label: 'Summer after Junior Year', desc: 'Most popular timing for internships' },
-                { value: 'flexible', label: 'Multiple Internships', desc: 'Pursue opportunities each summer' },
-                { value: 'none', label: 'No Internship Planned', desc: 'Focus on coursework and research' },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setProfile({ ...profile, internshipPreference: option.value as any })}
-                  className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                    profile.internshipPreference === option.value
-                      ? 'border-pink-600 bg-pink-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="font-semibold mb-1">{option.label}</div>
-                  <div className="text-sm text-gray-600">{option.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Step 4: Preferences */}
-        {step === 4 && (
-          <div className="space-y-6">
-            <div className="text-center mb-8">
-              <Settings className="w-16 h-16 mx-auto text-indigo-600 mb-4" />
-              <h2 className="text-3xl font-bold mb-2">Final preferences</h2>
-              <p className="text-gray-600">Customize your schedule settings</p>
-            </div>
-
-            <div>
-              <Label htmlFor="credits">Maximum Credits Per Semester</Label>
-              <Select
-                value={profile.maxCreditsPerSemester?.toString()}
-                onValueChange={(value) => setProfile({ ...profile, maxCreditsPerSemester: parseInt(value) })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="12">12 credits (Light load)</SelectItem>
-                  <SelectItem value="15">15 credits (Standard)</SelectItem>
-                  <SelectItem value="18">18 credits (Heavy load)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label className="mb-3 block">Preferred class days (optional)</Label>
-              <div className="flex flex-wrap gap-2">
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day) => {
-                  const isSelected = profile.preferredDays?.includes(day);
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => {
-                        const current = profile.preferredDays || [];
-                        setProfile({
-                          ...profile,
-                          preferredDays: isSelected
-                            ? current.filter((d) => d !== day)
-                            : [...current, day],
-                        });
-                      }}
-                      className={`px-4 py-2 rounded-lg border-2 transition-all ${
-                        isSelected
-                          ? 'border-indigo-600 bg-indigo-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-sm text-gray-500 mt-2">Leave empty for no preference</p>
             </div>
           </div>
         )}
