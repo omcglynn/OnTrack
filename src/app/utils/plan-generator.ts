@@ -2,17 +2,42 @@ import { Course, COURSES } from '@/app/data/mock-courses';
 import { SemesterPlan } from '@/app/components/roadmap-view';
 import { UserProfile } from '@/app/components/onboarding';
 
-export function generatePlans(profile: UserProfile) {
-  const allPlans = [
+export interface Plan {
+  id: string;
+  name: string;
+  description: string;
+  semesters: SemesterPlan[];
+  highlights: string[];
+  bestFor: string;
+}
+
+// Helper function to safely get a course by code
+function getCourse(code: string): Course {
+  const course = COURSES.find(c => c.code === code);
+  if (!course) {
+    console.warn(`Course not found: ${code}`);
+    // Return a placeholder course to prevent crashes
+    return {
+      id: `missing-${code}`,
+      code,
+      name: `${code} (Not Found)`,
+      credits: 3,
+      description: 'Course data not available',
+      category: 'major',
+    };
+  }
+  return course;
+}
+
+export function generatePlans(profile: UserProfile): Plan[] {
+  return [
     generateBalancedPlan(profile),
     generateFastTrackPlan(profile),
     generateInternshipHeavyPlan(profile),
   ];
-
-  return allPlans;
 }
 
-function generateBalancedPlan(profile: UserProfile): any {
+function generateBalancedPlan(profile: UserProfile): Plan {
   const semesters: SemesterPlan[] = [];
   
   // Year 1 Fall
@@ -21,10 +46,10 @@ function generateBalancedPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 1,
     courses: [
-      COURSES.find(c => c.code === 'CIS 1051')!,
-      COURSES.find(c => c.code === 'MATH 1041')!,
-      COURSES.find(c => c.code === 'ENGL 0802')!,
-      COURSES.find(c => c.code === 'GEN 1001')!,
+      getCourse('CIS 1051'),
+      getCourse('MATH 1041'),
+      getCourse('ENGL 0802'),
+      getCourse('GEN 1001'),
     ],
     totalCredits: 11,
   });
@@ -35,10 +60,10 @@ function generateBalancedPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 1,
     courses: [
-      COURSES.find(c => c.code === 'CIS 1057')!,
-      COURSES.find(c => c.code === 'MATH 1042')!,
-      COURSES.find(c => c.code === 'PHYS 1061')!,
-      COURSES.find(c => c.code === 'HIST 2051')!,
+      getCourse('CIS 1057'),
+      getCourse('MATH 1042'),
+      getCourse('PHYS 1061'),
+      getCourse('HIST 2051'),
     ],
     totalCredits: 14,
   });
@@ -49,10 +74,10 @@ function generateBalancedPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 2,
     courses: [
-      COURSES.find(c => c.code === 'CIS 2033')!,
-      COURSES.find(c => c.code === 'CIS 2107')!,
-      COURSES.find(c => c.code === 'CIS 2168')!,
-      COURSES.find(c => c.code === 'STAT 2103')!,
+      getCourse('CIS 2033'),
+      getCourse('CIS 2107'),
+      getCourse('CIS 2168'),
+      getCourse('STAT 2103'),
     ],
     totalCredits: 12,
   });
@@ -63,10 +88,10 @@ function generateBalancedPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 2,
     courses: [
-      COURSES.find(c => c.code === 'CIS 3207')!,
-      COURSES.find(c => c.code === 'CIS 3223')!,
-      COURSES.find(c => c.code === 'CIS 3296')!,
-      COURSES.find(c => c.code === 'ECON 1101')!,
+      getCourse('CIS 3207'),
+      getCourse('CIS 3223'),
+      getCourse('CIS 3296'),
+      getCourse('ECON 1101'),
     ],
     totalCredits: 12,
   });
@@ -77,10 +102,10 @@ function generateBalancedPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 3,
     courses: [
-      COURSES.find(c => c.code === 'CIS 3309')!,
-      COURSES.find(c => c.code === 'CIS 3715')!,
-      COURSES.find(c => c.code === 'CIS 4360')!,
-      COURSES.find(c => c.code === 'CIS 4398')!,
+      getCourse('CIS 3309'),
+      getCourse('CIS 3715'),
+      getCourse('CIS 4360'),
+      getCourse('CIS 4398'),
     ],
     totalCredits: 12,
   });
@@ -92,9 +117,9 @@ function generateBalancedPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 3,
     courses: [
-      COURSES.find(c => c.code === 'CIS 3800')!,
-      COURSES.find(c => c.code === 'CIS 4526')!,
-      COURSES.find(c => c.code === 'PHIL 2101')!,
+      getCourse('CIS 3800'),
+      getCourse('CIS 4526'),
+      getCourse('PHIL 2101'),
     ],
     totalCredits: 9,
     isInternshipSemester,
@@ -106,10 +131,10 @@ function generateBalancedPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 4,
     courses: [
-      COURSES.find(c => c.code === 'CIS 4515')!,
-      COURSES.find(c => c.code === 'CIS 4909')!,
-      COURSES.find(c => c.code === 'CIS 4396')!,
-      COURSES.find(c => c.code === 'CIS 4301')!,
+      getCourse('CIS 4515'),
+      getCourse('CIS 4909'),
+      getCourse('CIS 4396'),
+      getCourse('CIS 4301'),
     ],
     totalCredits: 12,
   });
@@ -120,10 +145,10 @@ function generateBalancedPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 4,
     courses: [
-      COURSES.find(c => c.code === 'CIS 4997')!,
-      COURSES.find(c => c.code === 'CIS 4555')!,
-      COURSES.find(c => c.code === 'CIS 4528')!,
-      COURSES.find(c => c.code === 'ART 2101')!,
+      getCourse('CIS 4997'),
+      getCourse('CIS 4555'),
+      getCourse('CIS 4528'),
+      getCourse('ART 2101'),
     ],
     totalCredits: 12,
   });
@@ -143,7 +168,7 @@ function generateBalancedPlan(profile: UserProfile): any {
   };
 }
 
-function generateFastTrackPlan(profile: UserProfile): any {
+function generateFastTrackPlan(profile: UserProfile): Plan {
   const semesters: SemesterPlan[] = [];
   
   // Year 1 Fall - Heavy load
@@ -152,11 +177,11 @@ function generateFastTrackPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 1,
     courses: [
-      COURSES.find(c => c.code === 'CIS 1051')!,
-      COURSES.find(c => c.code === 'MATH 1041')!,
-      COURSES.find(c => c.code === 'ENGL 0802')!,
-      COURSES.find(c => c.code === 'GEN 1001')!,
-      COURSES.find(c => c.code === 'HIST 2051')!,
+      getCourse('CIS 1051'),
+      getCourse('MATH 1041'),
+      getCourse('ENGL 0802'),
+      getCourse('GEN 1001'),
+      getCourse('HIST 2051'),
     ],
     totalCredits: 14,
   });
@@ -167,10 +192,10 @@ function generateFastTrackPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 1,
     courses: [
-      COURSES.find(c => c.code === 'CIS 1057')!,
-      COURSES.find(c => c.code === 'MATH 1042')!,
-      COURSES.find(c => c.code === 'PHYS 1061')!,
-      COURSES.find(c => c.code === 'STAT 2103')!,
+      getCourse('CIS 1057'),
+      getCourse('MATH 1042'),
+      getCourse('PHYS 1061'),
+      getCourse('STAT 2103'),
     ],
     totalCredits: 14,
   });
@@ -181,11 +206,11 @@ function generateFastTrackPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 2,
     courses: [
-      COURSES.find(c => c.code === 'CIS 2033')!,
-      COURSES.find(c => c.code === 'CIS 2107')!,
-      COURSES.find(c => c.code === 'CIS 2168')!,
-      COURSES.find(c => c.code === 'CIS 3207')!,
-      COURSES.find(c => c.code === 'ECON 1101')!,
+      getCourse('CIS 2033'),
+      getCourse('CIS 2107'),
+      getCourse('CIS 2168'),
+      getCourse('CIS 3207'),
+      getCourse('ECON 1101'),
     ],
     totalCredits: 15,
   });
@@ -196,9 +221,9 @@ function generateFastTrackPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 2,
     courses: [
-      COURSES.find(c => c.code === 'CIS 3223')!,
-      COURSES.find(c => c.code === 'CIS 3296')!,
-      COURSES.find(c => c.code === 'PHIL 2101')!,
+      getCourse('CIS 3223'),
+      getCourse('CIS 3296'),
+      getCourse('PHIL 2101'),
     ],
     totalCredits: 9,
     isInternshipSemester: true,
@@ -210,11 +235,11 @@ function generateFastTrackPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 3,
     courses: [
-      COURSES.find(c => c.code === 'CIS 3309')!,
-      COURSES.find(c => c.code === 'CIS 3715')!,
-      COURSES.find(c => c.code === 'CIS 4360')!,
-      COURSES.find(c => c.code === 'CIS 4398')!,
-      COURSES.find(c => c.code === 'CIS 4515')!,
+      getCourse('CIS 3309'),
+      getCourse('CIS 3715'),
+      getCourse('CIS 4360'),
+      getCourse('CIS 4398'),
+      getCourse('CIS 4515'),
     ],
     totalCredits: 15,
   });
@@ -225,10 +250,10 @@ function generateFastTrackPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 3,
     courses: [
-      COURSES.find(c => c.code === 'CIS 3800')!,
-      COURSES.find(c => c.code === 'CIS 4526')!,
-      COURSES.find(c => c.code === 'CIS 4909')!,
-      COURSES.find(c => c.code === 'CIS 4396')!,
+      getCourse('CIS 3800'),
+      getCourse('CIS 4526'),
+      getCourse('CIS 4909'),
+      getCourse('CIS 4396'),
     ],
     totalCredits: 12,
   });
@@ -239,9 +264,9 @@ function generateFastTrackPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 4,
     courses: [
-      COURSES.find(c => c.code === 'CIS 4301')!,
-      COURSES.find(c => c.code === 'CIS 4997')!,
-      COURSES.find(c => c.code === 'CIS 4555')!,
+      getCourse('CIS 4301'),
+      getCourse('CIS 4997'),
+      getCourse('CIS 4555'),
     ],
     totalCredits: 9,
   });
@@ -252,8 +277,8 @@ function generateFastTrackPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 4,
     courses: [
-      COURSES.find(c => c.code === 'CIS 4528')!,
-      COURSES.find(c => c.code === 'ART 2101')!,
+      getCourse('CIS 4528'),
+      getCourse('ART 2101'),
     ],
     totalCredits: 6,
   });
@@ -273,7 +298,7 @@ function generateFastTrackPlan(profile: UserProfile): any {
   };
 }
 
-function generateInternshipHeavyPlan(profile: UserProfile): any {
+function generateInternshipHeavyPlan(profile: UserProfile): Plan {
   const semesters: SemesterPlan[] = [];
   
   // Year 1 Fall
@@ -282,10 +307,10 @@ function generateInternshipHeavyPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 1,
     courses: [
-      COURSES.find(c => c.code === 'CIS 1051')!,
-      COURSES.find(c => c.code === 'MATH 1041')!,
-      COURSES.find(c => c.code === 'ENGL 0802')!,
-      COURSES.find(c => c.code === 'GEN 1001')!,
+      getCourse('CIS 1051'),
+      getCourse('MATH 1041'),
+      getCourse('ENGL 0802'),
+      getCourse('GEN 1001'),
     ],
     totalCredits: 11,
   });
@@ -296,10 +321,10 @@ function generateInternshipHeavyPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 1,
     courses: [
-      COURSES.find(c => c.code === 'CIS 1057')!,
-      COURSES.find(c => c.code === 'MATH 1042')!,
-      COURSES.find(c => c.code === 'PHYS 1061')!,
-      COURSES.find(c => c.code === 'HIST 2051')!,
+      getCourse('CIS 1057'),
+      getCourse('MATH 1042'),
+      getCourse('PHYS 1061'),
+      getCourse('HIST 2051'),
     ],
     totalCredits: 14,
   });
@@ -310,11 +335,11 @@ function generateInternshipHeavyPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 2,
     courses: [
-      COURSES.find(c => c.code === 'CIS 2033')!,
-      COURSES.find(c => c.code === 'CIS 2107')!,
-      COURSES.find(c => c.code === 'CIS 2168')!,
-      COURSES.find(c => c.code === 'STAT 2103')!,
-      COURSES.find(c => c.code === 'ECON 1101')!,
+      getCourse('CIS 2033'),
+      getCourse('CIS 2107'),
+      getCourse('CIS 2168'),
+      getCourse('STAT 2103'),
+      getCourse('ECON 1101'),
     ],
     totalCredits: 15,
   });
@@ -325,9 +350,9 @@ function generateInternshipHeavyPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 2,
     courses: [
-      COURSES.find(c => c.code === 'CIS 3207')!,
-      COURSES.find(c => c.code === 'CIS 3223')!,
-      COURSES.find(c => c.code === 'CIS 3296')!,
+      getCourse('CIS 3207'),
+      getCourse('CIS 3223'),
+      getCourse('CIS 3296'),
     ],
     totalCredits: 9,
     isInternshipSemester: true,
@@ -339,10 +364,10 @@ function generateInternshipHeavyPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 3,
     courses: [
-      COURSES.find(c => c.code === 'CIS 3309')!,
-      COURSES.find(c => c.code === 'CIS 3715')!,
-      COURSES.find(c => c.code === 'CIS 4360')!,
-      COURSES.find(c => c.code === 'CIS 4398')!,
+      getCourse('CIS 3309'),
+      getCourse('CIS 3715'),
+      getCourse('CIS 4360'),
+      getCourse('CIS 4398'),
     ],
     totalCredits: 12,
   });
@@ -353,8 +378,8 @@ function generateInternshipHeavyPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 3,
     courses: [
-      COURSES.find(c => c.code === 'CIS 3800')!,
-      COURSES.find(c => c.code === 'PHIL 2101')!,
+      getCourse('CIS 3800'),
+      getCourse('PHIL 2101'),
     ],
     totalCredits: 6,
     isInternshipSemester: true,
@@ -366,10 +391,10 @@ function generateInternshipHeavyPlan(profile: UserProfile): any {
     season: 'Fall',
     year: 4,
     courses: [
-      COURSES.find(c => c.code === 'CIS 4515')!,
-      COURSES.find(c => c.code === 'CIS 4909')!,
-      COURSES.find(c => c.code === 'CIS 4396')!,
-      COURSES.find(c => c.code === 'CIS 4526')!,
+      getCourse('CIS 4515'),
+      getCourse('CIS 4909'),
+      getCourse('CIS 4396'),
+      getCourse('CIS 4526'),
     ],
     totalCredits: 12,
   });
@@ -380,11 +405,11 @@ function generateInternshipHeavyPlan(profile: UserProfile): any {
     season: 'Spring',
     year: 4,
     courses: [
-      COURSES.find(c => c.code === 'CIS 4997')!,
-      COURSES.find(c => c.code === 'CIS 4301')!,
-      COURSES.find(c => c.code === 'CIS 4555')!,
-      COURSES.find(c => c.code === 'CIS 4528')!,
-      COURSES.find(c => c.code === 'ART 2101')!,
+      getCourse('CIS 4997'),
+      getCourse('CIS 4301'),
+      getCourse('CIS 4555'),
+      getCourse('CIS 4528'),
+      getCourse('ART 2101'),
     ],
     totalCredits: 15,
   });

@@ -1,24 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { supabase, isSupabaseConfigured } from '@/app/lib/supabase';
 import { AuthPage } from '@/app/components/auth-page';
 import { Onboarding, UserProfile } from '@/app/components/onboarding';
 import { RoadmapView } from '@/app/components/roadmap-view';
-import { PlanComparison } from '@/app/components/plan-comparison';
 import { WeeklyScheduleBuilder } from '@/app/components/weekly-schedule-builder';
 import { CourseDetailModal } from '@/app/components/course-detail-modal';
 import { CourseListPanel } from '@/app/components/course-list-panel';
 import { AIChatbot } from '@/app/components/ai-chatbot';
+import { ProfileEditDialog } from '@/app/components/profile-edit-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/app/components/ui/dropdown-menu';
 import { Course } from '@/app/data/mock-courses';
 import { generatePlans } from '@/app/utils/plan-generator';
-import { Calendar, Map, LayoutGrid, Sparkles, ChevronLeft, ChevronRight, BookOpen, Bot, Loader2, AlertCircle } from 'lucide-react';
+import { Calendar, Map, LayoutGrid, ChevronLeft, ChevronRight, BookOpen, Bot, Loader2, AlertCircle, LogOut, Settings } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
-type AppView = 'auth' | 'onboarding' | 'plan-selection' | 'dashboard';
+type AppView = 'auth' | 'onboarding' | 'dashboard';
 
 export default function App() {
   const [view, setView] = useState<AppView>('auth');
@@ -26,12 +33,56 @@ export default function App() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
+  const lastScrollYRef = useRef(0);
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('roadmap');
+  const [selectedSemesterIndex, setSelectedSemesterIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isProfileEditOpen, setIsProfileEditOpen] = useState(false);
+
+  // Helper function to load user profile and navigate appropriately
+  const loadUserProfile = async (userId: string): Promise<boolean> => {
+    try {
+      const { data: profileData, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error || !profileData) {
+        // No profile found
+        return false;
+      }
+
+      // Profile exists, fetch related data
+      const [universityResult, majorResult] = await Promise.all([
+        profileData.uniID ? supabase.from('universities').select('name').eq('id', profileData.uniID).maybeSingle() : Promise.resolve({ data: null, error: null }),
+        profileData.majorId ? supabase.from('majors').select('name').eq('id', profileData.majorId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      ]);
+
+      const fullName = [profileData.firstName, profileData.lastName].filter(Boolean).join(' ') || 'User';
+      const profile: UserProfile = {
+        name: fullName,
+        university: universityResult.data?.name || '',
+        universityId: profileData.uniID,
+        major: majorResult.data?.name || '',
+        majorId: profileData.majorId,
+        careerGoal: profileData.careerGoal || '',
+        internshipPreference: 'summer-year3',
+        maxCreditsPerSemester: 15,
+      };
+      
+      setUserProfile(profile);
+      setSelectedPlanId('balanced');
+      setView('dashboard');
+      return true;
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      return false;
+    }
+  };
 
   // Check authentication status on mount
   useEffect(() => {
@@ -42,28 +93,9 @@ export default function App() {
         if (session) {
           setIsAuthenticated(true);
           
-          // Check if user has a profile
-          const { data: profileData, error } = await supabase
-            .from('user_profiles')
-            .select('*, universities(name), majors(name)')
-            .eq('user_id', session.user.id)
-            .single();
-
-          if (error || !profileData) {
-            // No profile yet, go to onboarding
+          const hasProfile = await loadUserProfile(session.user.id);
+          if (!hasProfile) {
             setView('onboarding');
-          } else {
-            // Has profile, load it and go to dashboard
-            const profile: UserProfile = {
-              name: profileData.name,
-              university: profileData.universities.name,
-              major: profileData.majors.name,
-              careerGoal: profileData.career_goal,
-              internshipPreference: 'summer-year3',
-              maxCreditsPerSemester: 15,
-            };
-            setUserProfile(profile);
-            setView('plan-selection');
           }
         } else {
           setView('auth');
@@ -93,45 +125,69 @@ export default function App() {
     };
   }, []);
 
-  const handleAuthSuccess = () => {
+  const handleAuthSuccess = async () => {
     setIsAuthenticated(true);
-    setView('onboarding');
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        const hasProfile = await loadUserProfile(session.user.id);
+        if (!hasProfile) {
+          setView('onboarding');
+        }
+      } else {
+        setView('onboarding');
+      }
+    } catch (error) {
+      console.error('Error checking profile after auth:', error);
+      setView('onboarding');
+    }
   };
 
   const handleOnboardingComplete = (profile: UserProfile) => {
     setUserProfile(profile);
-    setView('plan-selection');
-  };
-
-  const handlePlanSelection = (planId: string) => {
-    setSelectedPlanId(planId);
+    setSelectedPlanId('balanced');
     setView('dashboard');
   };
 
-  // Handle scroll to show/hide header
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      
-      if (currentScrollY > lastScrollY && currentScrollY > 80) {
-        // Scrolling down & past threshold
-        setIsHeaderVisible(false);
-      } else {
-        // Scrolling up
-        setIsHeaderVisible(true);
-      }
-      
-      setLastScrollY(currentScrollY);
-    };
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUserProfile(null);
+      setSelectedPlanId(null);
+      setView('auth');
+      toast.success('Logged out successfully');
+    } catch (error: any) {
+      toast.error('Failed to log out: ' + error.message);
+    }
+  };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
+  const handleProfileUpdate = (updatedProfile: UserProfile) => {
+    setUserProfile(updatedProfile);
+  };
+
+  // Scroll handler is now on the main content div, not window
 
   // Generate all plans if we have a profile
   const allPlans = userProfile ? generatePlans(userProfile) : [];
   const selectedPlan = allPlans.find(p => p.id === selectedPlanId);
+  
+
+  // Show loading screen during initial auth check
+  if (loading) {
+    return (
+      <>
+        <Toaster position="top-center" richColors />
+        <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin text-white mx-auto mb-4" />
+            <p className="text-white text-lg">Loading OnTrack...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   // Show configuration screen if Supabase is not set up
   if (!isSupabaseConfigured()) {
@@ -181,25 +237,7 @@ export default function App() {
     );
   }
 
-  if (view === 'plan-selection' && userProfile) {
-    return (
-      <>
-        <Toaster position="top-center" richColors />
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 py-12 px-4">
-          <div className="container mx-auto max-w-7xl">
-            <PlanComparison
-              plans={allPlans}
-              onSelectPlan={handlePlanSelection}
-            />
-          </div>
-        </div>
-      </>
-    );
-  }
-
   if (view === 'dashboard' && userProfile && selectedPlan) {
-    const nextSemester = selectedPlan.semesters[0]; // For demo, showing first semester
-
     return (
       <>
         <Toaster position="top-center" richColors />
@@ -208,55 +246,69 @@ export default function App() {
             {/* Header with dissolve on scroll */}
             <div 
               className={`bg-white shadow-sm border-b z-20 transition-all duration-300 ${
-                isHeaderVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
+                isHeaderVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'
               }`}
-              style={{ position: 'sticky', top: 0 }}
+              style={{ position: 'fixed', top: 0, left: 0, right: 0 }}
             >
               <div className="px-4 py-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-3">
-                      <button 
-                        onClick={() => setActiveTab('roadmap')}
-                        className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center hover:scale-110 transition-transform cursor-pointer shadow-md"
-                        title="Go to 4-Year Roadmap"
-                      >
-                        <span className="text-white font-bold text-lg">
-                          {userProfile.name?.charAt(0).toUpperCase()}
-                        </span>
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button 
+                            className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center hover:scale-110 transition-transform cursor-pointer shadow-md"
+                            title="Profile menu"
+                          >
+                            <span className="text-white font-bold text-lg">
+                              {userProfile.name?.charAt(0).toUpperCase()}
+                            </span>
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48">
+                          <div className="px-2 py-1.5 text-sm font-medium">
+                            {userProfile.name}
+                          </div>
+                          <div className="px-2 pb-1.5 text-xs text-gray-500">
+                            {userProfile.major}
+                          </div>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => setIsProfileEditOpen(true)}>
+                            <Settings className="w-4 h-4 mr-2" />
+                            Edit Profile
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">
+                            <LogOut className="w-4 h-4 mr-2" />
+                            Log Out
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       <div>
                         <h1 className="text-xl font-bold">
                           OnTrack
                         </h1>
                         <p className="text-sm text-gray-600">
-                          {userProfile.name} • {userProfile.major} • Year {userProfile.currentYear}
+                          {userProfile.name} • {userProfile.major}
                         </p>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setView('plan-selection')}
-                      className="gap-2"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      Create Another Plan
-                    </Button>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Three-column layout: Course List | Main Content | AI Chatbot */}
-            <div className="flex flex-1 overflow-hidden relative">
+            <div className="flex overflow-hidden relative" style={{ 
+              marginTop: isHeaderVisible ? '88px' : '0px', 
+              height: isHeaderVisible ? 'calc(100vh - 88px)' : '100vh',
+              transition: 'margin-top 0.3s, height 0.3s' 
+            }}>
               {/* Left Panel - Course List (Collapsible) */}
               <div 
                 className={`transition-all duration-300 ease-in-out bg-white border-r shadow-sm ${
                   isLeftPanelOpen ? 'w-80' : 'w-0'
-                } overflow-hidden`}
+                } overflow-hidden flex flex-col h-full`}
               >
                 <CourseListPanel 
                   onCourseClick={(course) => setSelectedCourse(course)}
@@ -319,6 +371,7 @@ export default function App() {
                   onScroll={(e) => {
                     const target = e.target as HTMLDivElement;
                     const currentScrollY = target.scrollTop;
+                    const lastScrollY = lastScrollYRef.current;
                     
                     if (currentScrollY > lastScrollY && currentScrollY > 80) {
                       setIsHeaderVisible(false);
@@ -326,7 +379,8 @@ export default function App() {
                       setIsHeaderVisible(true);
                     }
                     
-                    setLastScrollY(currentScrollY);
+                    // Use ref instead of state to avoid re-renders
+                    lastScrollYRef.current = currentScrollY;
                   }}
                 >
                   <div className="container mx-auto max-w-5xl px-4 py-8">
@@ -339,7 +393,7 @@ export default function App() {
                         </TabsTrigger>
                         <TabsTrigger value="schedule" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-md">
                           <Calendar className="w-4 h-4" />
-                          Next Semester Schedule
+                          Semester Calendar
                         </TabsTrigger>
                         <TabsTrigger value="overview" className="gap-2 data-[state=active]:bg-white data-[state=active]:shadow-md">
                           <LayoutGrid className="w-4 h-4" />
@@ -352,13 +406,18 @@ export default function App() {
                           plan={selectedPlan.semesters}
                           careerGoal={userProfile.careerGoal}
                           onCourseClick={(course) => setSelectedCourse(course)}
-                          onViewSchedule={() => setActiveTab('schedule')}
+                          onViewSchedule={(semesterIndex) => {
+                            setSelectedSemesterIndex(semesterIndex);
+                            setActiveTab('schedule');
+                          }}
                         />
                       </TabsContent>
 
                       <TabsContent value="schedule">
                         <WeeklyScheduleBuilder
-                          nextSemester={nextSemester}
+                          semesters={selectedPlan.semesters}
+                          selectedSemesterIndex={selectedSemesterIndex}
+                          onSemesterChange={setSelectedSemesterIndex}
                           careerGoal={userProfile.careerGoal}
                           onCourseClick={(course) => setSelectedCourse(course)}
                         />
@@ -393,11 +452,11 @@ export default function App() {
                                 <div className="space-y-2 text-sm">
                                   <div className="flex justify-between">
                                     <span className="text-gray-600">University:</span>
-                                    <span className="font-medium">{userProfile.university === 'temple' ? 'Temple University' : 'UMass Amherst'}</span>
+                                    <span className="font-medium">{userProfile.university}</span>
                                   </div>
                                   <div className="flex justify-between">
                                     <span className="text-gray-600">Major:</span>
-                                    <span className="font-medium">Computer Science</span>
+                                    <span className="font-medium">{userProfile.major}</span>
                                   </div>
                                   <div className="flex justify-between">
                                     <span className="text-gray-600">Career Goal:</span>
@@ -476,15 +535,13 @@ export default function App() {
               <div 
                 className={`transition-all duration-300 ease-in-out ${
                   isRightPanelOpen ? 'w-96' : 'w-0'
-                } overflow-hidden`}
+                } overflow-hidden flex flex-col h-full`}
               >
-                <div className="sticky top-0 h-screen">
-                  <AIChatbot 
-                    careerGoal={userProfile.careerGoal}
-                    userName={userProfile.name}
-                    major={userProfile.major}
-                  />
-                </div>
+                <AIChatbot 
+                  careerGoal={userProfile.careerGoal}
+                  userName={userProfile.name}
+                  major={userProfile.major}
+                />
               </div>
 
               {/* Right Panel Toggle Button */}
@@ -513,6 +570,14 @@ export default function App() {
                 onClose={() => setSelectedCourse(null)}
               />
             )}
+
+            {/* Profile Edit Dialog */}
+            <ProfileEditDialog
+              open={isProfileEditOpen}
+              onOpenChange={setIsProfileEditOpen}
+              profile={userProfile}
+              onProfileUpdate={handleProfileUpdate}
+            />
           </div>
         </DndProvider>
       </>

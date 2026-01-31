@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 import { Course } from '@/app/data/mock-courses';
 import { SemesterPlan } from './roadmap-view';
 import { Card } from '@/app/components/ui/card';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { Calendar, Download, RefreshCw, GripVertical } from 'lucide-react';
+import { Download, RefreshCw, GripVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ClassSchedule {
   id: string;
@@ -19,7 +19,9 @@ interface ClassSchedule {
 }
 
 interface WeeklyScheduleBuilderProps {
-  nextSemester: SemesterPlan;
+  semesters: SemesterPlan[];
+  selectedSemesterIndex: number;
+  onSemesterChange: (index: number) => void;
   careerGoal: string;
   onCourseClick?: (course: Course) => void;
 }
@@ -68,8 +70,10 @@ function getClassPosition(startTime: string, endTime: string) {
   const endMinutes = timeToMinutes(endTime);
   const dayStartMinutes = timeToMinutes('08:00');
   
-  const topPosition = ((startMinutes - dayStartMinutes) / 60) * 80;
-  const height = ((endMinutes - startMinutes) / 60) * 80;
+  // Reduced from 80 to 56 to make calendar more compact (h-14 = 56px)
+  const slotHeight = 56;
+  const topPosition = ((startMinutes - dayStartMinutes) / 60) * slotHeight;
+  const height = ((endMinutes - startMinutes) / 60) * slotHeight;
   
   return { top: topPosition, height };
 }
@@ -128,10 +132,22 @@ const DraggableCourse = ({ classSchedule, day, color, onCourseClick }: Draggable
   );
 };
 
-export function WeeklyScheduleBuilder({ nextSemester, careerGoal, onCourseClick }: WeeklyScheduleBuilderProps) {
+export function WeeklyScheduleBuilder({ 
+  semesters, 
+  selectedSemesterIndex, 
+  onSemesterChange, 
+  careerGoal, 
+  onCourseClick 
+}: WeeklyScheduleBuilderProps) {
+  const currentSemester = semesters[selectedSemesterIndex];
   const [schedule, setSchedule] = useState<ClassSchedule[]>(
-    generateMockSchedule(nextSemester.courses)
+    generateMockSchedule(currentSemester.courses)
   );
+
+  // Update schedule when semester changes
+  useEffect(() => {
+    setSchedule(generateMockSchedule(currentSemester.courses));
+  }, [selectedSemesterIndex, currentSemester.courses]);
 
   const moveCourse = useCallback((courseId: string, toDay: string) => {
     setSchedule((prevSchedule) => {
@@ -161,7 +177,23 @@ export function WeeklyScheduleBuilder({ nextSemester, careerGoal, onCourseClick 
   };
 
   const handleRegenerate = () => {
-    setSchedule(generateMockSchedule(nextSemester.courses));
+    setSchedule(generateMockSchedule(currentSemester.courses));
+  };
+
+  const handlePreviousSemester = () => {
+    if (selectedSemesterIndex > 0) {
+      onSemesterChange(selectedSemesterIndex - 1);
+    }
+  };
+
+  const handleNextSemester = () => {
+    if (selectedSemesterIndex < semesters.length - 1) {
+      onSemesterChange(selectedSemesterIndex + 1);
+    }
+  };
+
+  const getSemesterLabel = (semester: SemesterPlan) => {
+    return `${semester.season} Year ${semester.year}`;
   };
 
   const getRelevanceColor = (course: Course) => {
@@ -173,24 +205,69 @@ export function WeeklyScheduleBuilder({ nextSemester, careerGoal, onCourseClick 
   };
 
   return (
-    <div className="space-y-6">
+      <div className="space-y-4">
       {/* Header */}
-      <Card className="p-4 sm:p-6 bg-gradient-to-r from-blue-50 to-purple-50">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h2 className="text-xl sm:text-2xl font-bold mb-1">
-              {nextSemester.season} {nextSemester.year} Schedule
-            </h2>
-            <p className="text-sm text-gray-600">
-              {nextSemester.totalCredits} credits • {nextSemester.courses.length} courses • <span className="text-indigo-600 font-medium">Drag classes to rearrange</span>
-            </p>
+      <Card className="p-3 sm:p-4 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="flex flex-col gap-3">
+          {/* Semester Navigation */}
+          <div className="flex items-center justify-between gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePreviousSemester}
+              disabled={selectedSemesterIndex === 0}
+              className="gap-2"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </Button>
+            
+            <div className="flex-1 text-center">
+              <h2 className="text-lg sm:text-xl font-bold mb-0.5">
+                {getSemesterLabel(currentSemester)} Schedule
+              </h2>
+              <p className="text-xs text-gray-600">
+                Semester {currentSemester.semester} of {semesters.length} • {currentSemester.totalCredits} credits • {currentSemester.courses.length} courses
+              </p>
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNextSemester}
+              disabled={selectedSemesterIndex === semesters.length - 1}
+              className="gap-2"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </Button>
           </div>
-          <div className="flex gap-2 w-full md:w-auto">
-            <Button variant="outline" size="sm" onClick={handleRegenerate} className="gap-2 flex-1 md:flex-none">
+
+          {/* Semester Selector - Quick Navigation */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            <span className="text-xs font-medium text-gray-600 whitespace-nowrap">Quick Jump:</span>
+            <div className="flex gap-1">
+              {semesters.map((sem, idx) => (
+                <Button
+                  key={idx}
+                  variant={idx === selectedSemesterIndex ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => onSemesterChange(idx)}
+                  className="text-xs whitespace-nowrap"
+                >
+                  {sem.season} Y{sem.year}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" size="sm" onClick={handleRegenerate} className="gap-2">
               <RefreshCw className="w-4 h-4" />
               Reset
             </Button>
-            <Button size="sm" onClick={handleExportCalendar} className="gap-2 flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-700">
+            <Button size="sm" onClick={handleExportCalendar} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
               <Download className="w-4 h-4" />
               Export
             </Button>
@@ -199,14 +276,14 @@ export function WeeklyScheduleBuilder({ nextSemester, careerGoal, onCourseClick 
       </Card>
 
       {/* Weekly Calendar Grid */}
-      <Card className="p-2 sm:p-6 bg-white overflow-hidden shadow-xl border-indigo-100">
+      <Card className="p-2 sm:p-4 bg-white overflow-hidden shadow-xl border-indigo-100">
         <div className="overflow-x-auto">
           <div className="min-w-[700px]">
             {/* Header */}
-            <div className="grid grid-cols-[80px_repeat(5,1fr)] border-b mb-4">
-              <div className="p-2"></div>
+            <div className="grid grid-cols-[80px_repeat(5,1fr)] border-b mb-2">
+              <div className="p-1.5"></div>
               {DAYS.map(day => (
-                <div key={day} className="p-2 text-center font-bold text-gray-700">
+                <div key={day} className="p-1.5 text-center font-bold text-sm text-gray-700">
                   {day}
                 </div>
               ))}
@@ -217,7 +294,7 @@ export function WeeklyScheduleBuilder({ nextSemester, careerGoal, onCourseClick 
               {/* Time column */}
               <div className="border-r border-gray-100">
                 {TIME_SLOTS.map((time) => (
-                  <div key={time} className="h-20 border-b border-gray-50 flex items-start justify-center pt-1 text-xs font-medium text-gray-400">
+                  <div key={time} className="h-14 border-b border-gray-50 flex items-start justify-center pt-1 text-[10px] font-medium text-gray-400">
                     {time}
                   </div>
                 ))}
@@ -232,7 +309,7 @@ export function WeeklyScheduleBuilder({ nextSemester, careerGoal, onCourseClick 
                 >
                   {/* Grid lines */}
                   {TIME_SLOTS.map((time) => (
-                    <div key={time} className="h-20 border-b border-gray-50"></div>
+                    <div key={time} className="h-14 border-b border-gray-50"></div>
                   ))}
 
                   {/* Classes for this day */}
@@ -253,18 +330,18 @@ export function WeeklyScheduleBuilder({ nextSemester, careerGoal, onCourseClick 
       </Card>
 
       {/* Quick View Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="p-4 flex flex-col items-center justify-center text-center bg-blue-50/50 border-blue-100">
-          <span className="text-xs text-blue-600 font-bold uppercase tracking-wider mb-1">Weekly Load</span>
-          <span className="text-2xl font-bold text-blue-900">{nextSemester.totalCredits} Credits</span>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="p-3 flex flex-col items-center justify-center text-center bg-blue-50/50 border-blue-100">
+          <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider mb-0.5">Weekly Load</span>
+          <span className="text-xl font-bold text-blue-900">{currentSemester.totalCredits} Credits</span>
         </Card>
-        <Card className="p-4 flex flex-col items-center justify-center text-center bg-purple-50/50 border-purple-100">
-          <span className="text-xs text-purple-600 font-bold uppercase tracking-wider mb-1">Career Match</span>
-          <span className="text-2xl font-bold text-purple-900">94%</span>
+        <Card className="p-3 flex flex-col items-center justify-center text-center bg-purple-50/50 border-purple-100">
+          <span className="text-[10px] text-purple-600 font-bold uppercase tracking-wider mb-0.5">Career Match</span>
+          <span className="text-xl font-bold text-purple-900">94%</span>
         </Card>
-        <Card className="p-4 flex flex-col items-center justify-center text-center bg-pink-50/50 border-pink-100">
-          <span className="text-xs text-pink-600 font-bold uppercase tracking-wider mb-1">Study Hours</span>
-          <span className="text-2xl font-bold text-pink-900">~25 hrs</span>
+        <Card className="p-3 flex flex-col items-center justify-center text-center bg-pink-50/50 border-pink-100">
+          <span className="text-[10px] text-pink-600 font-bold uppercase tracking-wider mb-0.5">Study Hours</span>
+          <span className="text-xl font-bold text-pink-900">~25 hrs</span>
         </Card>
       </div>
     </div>

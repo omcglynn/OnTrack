@@ -3,7 +3,7 @@ import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { Input } from '@/app/components/ui/input';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
-import { Send, Bot, User, Sparkles, Loader2, Search } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -28,7 +28,6 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
     },
   ]);
   const [input, setInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -126,25 +125,18 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
     }, 1000 + Math.random() * 1000);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
-  // Suggested prompts
-  const suggestedPrompts = [
-    "What courses should I take next semester?",
-    "How do I prepare for internships?",
-    "Tell me about machine learning courses",
-    "How can I improve my coding skills?",
-  ];
 
   return (
-    <div className="w-96 bg-white border-l shadow-sm flex flex-col h-full">
+    <div className="w-96 bg-white border-l shadow-sm flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b bg-gradient-to-r from-purple-600 to-blue-600">
+      <div className="p-4 border-b bg-gradient-to-r from-purple-600 to-blue-600 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
             <Bot className="w-6 h-6 text-purple-600" />
@@ -161,7 +153,7 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 min-h-0 p-4">
         <div className="space-y-4">
           {messages.map((message) => (
             <div
@@ -214,30 +206,14 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
         </div>
       </ScrollArea>
 
-      {/* Suggested Prompts - Always Visible */}
-      <div className="px-4 py-3 border-t border-b bg-gray-50/50">
-        <p className="text-xs font-semibold text-gray-500 mb-2">💡 Suggested Questions:</p>
-        <div className="grid grid-cols-1 gap-1.5">
-          {suggestedPrompts.slice(0, 3).map((prompt, idx) => (
-            <button
-              key={idx}
-              className="text-left text-xs py-1.5 px-2 rounded bg-white hover:bg-indigo-50 hover:text-indigo-700 transition-colors border border-gray-200 hover:border-indigo-300"
-              onClick={() => setInput(prompt)}
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Input */}
-      <div className="p-4 border-t bg-gray-50">
+      <div className="p-4 border-t bg-gray-50 flex-shrink-0">
         <div className="flex gap-2">
           <Input
             placeholder="Ask me anything..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyDown}
             disabled={isLoading}
             className="flex-1"
           />
@@ -253,28 +229,6 @@ export function AIChatbot({ careerGoal, userName, major }: AIChatbotProps) {
               <Send className="w-4 h-4" />
             )}
           </Button>
-        </div>
-        <p className="text-xs text-gray-500 mt-2 text-center">
-          AI-powered academic advisor for OnTrack
-        </p>
-      </div>
-
-      {/* Search Bar at Bottom */}
-      <div className="p-3 border-t bg-white">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            placeholder="Search courses, topics, or keywords..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && searchQuery.trim()) {
-                handleSend(searchQuery.trim());
-                setSearchQuery('');
-              }
-            }}
-            className="pl-9 text-sm bg-gray-50 border-gray-200 focus:bg-white"
-          />
         </div>
       </div>
     </div>

@@ -48,9 +48,9 @@ export function CourseListPanel({ onCourseClick, careerGoal }: CourseListPanelPr
   ];
 
   return (
-    <div className="w-80 bg-white border-r shadow-sm flex flex-col h-full">
+    <div className="w-80 bg-white border-r shadow-sm flex flex-col h-full overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b">
+      <div className="p-4 border-b flex-shrink-0">
         <div className="flex items-center gap-2 mb-3">
           <BookOpen className="w-5 h-5 text-purple-600" />
           <h2 className="font-bold text-lg">Course Catalog</h2>
@@ -69,7 +69,7 @@ export function CourseListPanel({ onCourseClick, careerGoal }: CourseListPanelPr
       </div>
 
       {/* Category Filters */}
-      <div className="p-4 border-b">
+      <div className="p-4 border-b flex-shrink-0">
         <div className="flex flex-wrap gap-2">
           {categories.map((cat) => (
             <Button
@@ -86,7 +86,7 @@ export function CourseListPanel({ onCourseClick, careerGoal }: CourseListPanelPr
       </div>
 
       {/* Course List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="p-4 space-y-3">
           {sortedCourses.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -179,7 +179,7 @@ export function CourseListPanel({ onCourseClick, careerGoal }: CourseListPanelPr
       </ScrollArea>
 
       {/* Footer */}
-      <div className="p-4 border-t bg-gray-50">
+      <div className="p-4 border-t bg-gray-50 flex-shrink-0">
         <div className="text-xs text-gray-600 text-center">
           Showing {sortedCourses.length} of {COURSES.length} courses
         </div>

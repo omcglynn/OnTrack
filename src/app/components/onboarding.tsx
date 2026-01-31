@@ -40,30 +40,50 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   const totalSteps = 4;
 
-  // Fetch universities and majors from database
+  // Fetch universities from database
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchUniversities = async () => {
       try {
-        const [universitiesResponse, majorsResponse] = await Promise.all([
-          supabase.from('universities').select('name, id, aliases'),
-          supabase.from('majors').select('name, id'),
-        ]);
+        const { data, error } = await supabase
+          .from('universities')
+          .select('name, id, aliases');
 
-        if (universitiesResponse.error) throw universitiesResponse.error;
-        if (majorsResponse.error) throw majorsResponse.error;
-        console.log(universitiesResponse.data)
-        console.log(majorsResponse.data)
-        setUniversities(universitiesResponse.data || []);
-        setMajors(majorsResponse.data || []);
+        if (error) throw error;
+        setUniversities(data || []);
       } catch (error: any) {
-        toast.error('Failed to load data: ' + error.message);
+        toast.error('Failed to load universities: ' + error.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchUniversities();
   }, []);
+
+  // Fetch majors when university is selected
+  useEffect(() => {
+    const fetchMajors = async () => {
+      if (!profile.universityId) {
+        setMajors([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('majors')
+          .select('id, name, uniId')
+          .eq('uniId', profile.universityId);
+
+        if (error) throw error;
+        setMajors(data || []);
+      } catch (error: any) {
+        toast.error('Failed to load majors: ' + error.message);
+        setMajors([]);
+      }
+    };
+
+    fetchMajors();
+  }, [profile.universityId]);
 
   const handleNext = async () => {
     if (step < totalSteps) {
@@ -84,27 +104,32 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         return;
       }
 
-      // Find university and major IDs
-      const university = universities.find(u => u.name === profile.university);
-      const major = majors.find(m => m.name === profile.major);
-
-      if (!university || !major) {
-        toast.error('Invalid university or major selected');
+      // Validate that IDs are set
+      if (!profile.universityId || !profile.majorId) {
+        toast.error('Please select both university and major');
         return;
       }
 
+      // Split name into firstName and lastName
+      const nameParts = (profile.name || '').trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
       // Insert or update user profile
+      // Convert majorId from string (Combobox) to number (database bigint)
+      const majorIdNumber = profile.majorId ? parseInt(profile.majorId, 10) : null;
+      
       const { error } = await supabase
-        .from('user_profiles')
+        .from('users')
         .upsert({
-          user_id: user.id,
-          name: profile.name,
-          university_id: university.id,
-          major_id: major.id,
-          career_goal: profile.careerGoal,
-          updated_at: new Date().toISOString(),
+          id: user.id,
+          firstName: firstName,
+          lastName: lastName,
+          uniID: profile.universityId,
+          majorId: majorIdNumber,
+          careerGoal: profile.careerGoal || '',
         }, {
-          onConflict: 'user_id'
+          onConflict: 'id'
         });
 
       if (error) throw error;
@@ -125,7 +150,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const canProceed = () => {
     switch (step) {
       case 1:
-        return profile.name && profile.university && profile.major;
+        return profile.name && profile.universityId && profile.majorId;
       case 2:
         return profile.careerGoal && profile.careerGoal.trim().length > 0;
       case 3:
@@ -139,7 +164,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   // Convert universities to combobox options with search terms
   const majorOptions = majors.map((m) => ({
-    id: m.id,
+    id: String(m.id), // Convert to string for Combobox
     label: m.name,
   }));
   
@@ -202,8 +227,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 <Label>University</Label>
                 <Combobox
                   options={universityOptions}
-                  value={profile.university}
-                  onValueChange={(value) => setProfile({ ...profile, university: value })}
+                  value={profile.universityId}
+                  onValueChange={(id) => {
+                    const selectedUniversity = universities.find(u => u.id === id);
+                    setProfile({ 
+                      ...profile, 
+                      universityId: id,
+                      university: selectedUniversity?.name || '',
+                      majorId: '', // Clear major when university changes
+                      major: ''
+                    });
+                  }}
                   placeholder="Select university..."
                   searchPlaceholder="Search universities..."
                   emptyText="No university found."
@@ -214,11 +248,19 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 <Label>Major</Label>
                 <Combobox
                   options={majorOptions}
-                  value={profile.major}
-                  onValueChange={(value) => setProfile({ ...profile, major: value })}
-                  placeholder="Select major..."
+                  value={profile.majorId}
+                  onValueChange={(id) => {
+                    const selectedMajor = majors.find(m => String(m.id) === id);
+                    setProfile({ 
+                      ...profile, 
+                      majorId: id,
+                      major: selectedMajor?.name || ''
+                    });
+                  }}
+                  placeholder={profile.universityId ? "Select major..." : "Select university first"}
                   searchPlaceholder="Search majors..."
                   emptyText="No major found."
+                  allowClear={false}
                 />
               </div>
             </div>

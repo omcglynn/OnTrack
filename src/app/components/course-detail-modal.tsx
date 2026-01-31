@@ -1,7 +1,7 @@
 import { Course } from '@/app/data/mock-courses';
 import { Button } from '@/app/components/ui/button';
 import { Badge } from '@/app/components/ui/badge';
-import { X, BookOpen, TrendingUp, Zap, Star, Clock } from 'lucide-react';
+import { X, BookOpen, TrendingUp, Zap, Star } from 'lucide-react';
 
 interface CourseDetailModalProps {
   course: Course;

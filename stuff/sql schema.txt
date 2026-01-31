@@ -1,0 +1,77 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.courses (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  subject text,
+  number bigint,
+  credits smallint,
+  university uuid,
+  title text,
+  attributes ARRAY,
+  prerequisites ARRAY,
+  description text,
+  CONSTRAINT courses_pkey PRIMARY KEY (id),
+  CONSTRAINT course_university_fkey FOREIGN KEY (university) REFERENCES public.universities(id)
+);
+CREATE TABLE public.gradReqs (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  uniId uuid,
+  majorId bigint,
+  courses ARRAY,
+  howMany bigint,
+  CONSTRAINT gradReqs_pkey PRIMARY KEY (id),
+  CONSTRAINT gradReqs_uniId_fkey FOREIGN KEY (uniId) REFERENCES public.universities(id),
+  CONSTRAINT gradReqs_majorId_fkey FOREIGN KEY (majorId) REFERENCES public.majors(id)
+);
+CREATE TABLE public.majors (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  uniId uuid,
+  name text,
+  creditReq bigint,
+  CONSTRAINT majors_pkey PRIMARY KEY (id),
+  CONSTRAINT majors_uniId_fkey FOREIGN KEY (uniId) REFERENCES public.universities(id)
+);
+CREATE TABLE public.schedules (
+  id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  userId uuid,
+  term text,
+  sectionIds ARRAY,
+  CONSTRAINT schedules_pkey PRIMARY KEY (id),
+  CONSTRAINT schedules_userId_fkey FOREIGN KEY (userId) REFERENCES auth.users(id)
+);
+CREATE TABLE public.sections (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  instructor text,
+  courseid uuid,
+  days ARRAY,
+  terms ARRAY,
+  timeFrom time with time zone,
+  timeTo time with time zone,
+  CONSTRAINT sections_pkey PRIMARY KEY (id),
+  CONSTRAINT sections_courseid_fkey FOREIGN KEY (courseid) REFERENCES public.courses(id)
+);
+CREATE TABLE public.universities (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text,
+  aliases ARRAY,
+  terms ARRAY,
+  timezone text,
+  majors ARRAY,
+  attributes ARRAY,
+  CONSTRAINT universities_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.users (
+  id uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  uniID uuid DEFAULT gen_random_uuid(),
+  careerGoal text DEFAULT ''::text,
+  completedCourses ARRAY,
+  firstName text,
+  lastName text,
+  majorId bigint,
+  CONSTRAINT users_pkey PRIMARY KEY (id),
+  CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id),
+  CONSTRAINT users_majorId_fkey FOREIGN KEY (majorId) REFERENCES public.majors(id)
+);

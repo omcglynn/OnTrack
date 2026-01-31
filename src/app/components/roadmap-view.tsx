@@ -1,7 +1,7 @@
 import { Course } from '@/app/data/mock-courses';
 import { Card } from '@/app/components/ui/card';
 import { Badge } from '@/app/components/ui/badge';
-import { Book, Star, TrendingUp, Briefcase, CheckCircle2, Calendar } from 'lucide-react';
+import { Star, TrendingUp, Briefcase, Calendar } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 
 export interface SemesterPlan {
