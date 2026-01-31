@@ -11,7 +11,7 @@ import { CourseListPanel } from '@/app/components/course-list-panel';
 import { AIChatbot } from '@/app/components/ai-chatbot';
 import { ProfileEditDialog } from '@/app/components/profile-edit-dialog';
 import { SchedulePreviewModal } from '@/app/components/schedule-preview-modal';
-import { AIScheduleRecommendation } from '@/app/lib/gemini';
+import { AIScheduleRecommendation, generatePersonalizedInsights, PersonalizedInsights, PlanInsightsData } from '@/app/lib/gemini';
 import { buildScheduleFromCodes, GeneratedSchedule, ScheduledCourse } from '@/app/utils/schedule-generator';
 import { RequirementsBreakdown } from '@/app/components/requirements-breakdown';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/app/components/ui/tabs';
@@ -50,6 +50,8 @@ export default function App() {
   const [generatedSchedule, setGeneratedSchedule] = useState<GeneratedSchedule | null>(null);
   const [scheduleReasoning, setScheduleReasoning] = useState<string>('');
   const [shouldReopenSchedulePreview, setShouldReopenSchedulePreview] = useState(false);
+  const [personalizedInsights, setPersonalizedInsights] = useState<PersonalizedInsights | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
   // Helper function to load user profile and navigate appropriately
   const loadUserProfile = async (userId: string): Promise<boolean> => {
@@ -283,7 +285,149 @@ export default function App() {
       )
     );
   };
-  
+
+  // Generate personalized insights
+  const generateInsights = async () => {
+    if (!selectedPlan || !userProfile) return;
+
+    setInsightsLoading(true);
+    try {
+      // Calculate completed courses with grades
+      const completedCourses = selectedPlan.semesters
+        .flatMap((s: SemesterPlan) => s.courses)
+        .filter((c: PlannedCourse) => c.completed)
+        .map((c: PlannedCourse) => ({
+          code: c.code,
+          name: c.name,
+          grade: c.grade,
+          credits: c.credits,
+        }));
+
+      // Calculate upcoming courses (next 2-3 semesters)
+      const currentSemesterIndex = selectedPlan.semesters.findIndex(
+        (s: SemesterPlan) => s.status === 'in-progress'
+      );
+      const upcomingSemesters = selectedPlan.semesters.slice(
+        Math.max(0, currentSemesterIndex),
+        Math.min(selectedPlan.semesters.length, currentSemesterIndex + 3)
+      );
+      const upcomingCourses = upcomingSemesters
+        .flatMap((s: SemesterPlan) => 
+          s.courses
+            .filter((c: PlannedCourse) => !c.completed)
+            .map((c: PlannedCourse) => ({
+              code: c.code,
+              name: c.name,
+              semester: s.semester,
+              season: s.season,
+              year: s.year,
+            }))
+        );
+
+      // Calculate requirements progress
+      const gpaData = calculateGPA(selectedPlan.semesters);
+      const cisCore = completedCourses
+        .filter((c: { code: string; name: string; grade?: string; credits: number }) => {
+          const course = selectedPlan.semesters
+            .flatMap((s: SemesterPlan) => s.courses)
+            .find((pc: PlannedCourse) => pc.code === c.code);
+          return course?.category === 'major';
+        })
+        .reduce((sum: number, c: { code: string; name: string; grade?: string; credits: number }) => sum + c.credits, 0);
+      const math = completedCourses
+        .filter((c: { code: string; name: string; grade?: string; credits: number }) => {
+          const course = selectedPlan.semesters
+            .flatMap((s: SemesterPlan) => s.courses)
+            .find((pc: PlannedCourse) => pc.code === c.code);
+          return course?.category === 'core';
+        })
+        .reduce((sum: number, c: { code: string; name: string; grade?: string; credits: number }) => sum + c.credits, 0);
+      const labScience = completedCourses
+        .filter((c: { code: string; name: string; grade?: string; credits: number }) => {
+          const course = selectedPlan.semesters
+            .flatMap((s: SemesterPlan) => s.courses)
+            .find((pc: PlannedCourse) => pc.code === c.code);
+          return course?.category === 'lab-science';
+        })
+        .reduce((sum: number, c: { code: string; name: string; grade?: string; credits: number }) => sum + c.credits, 0);
+      const csElectives = completedCourses
+        .filter((c: { code: string; name: string; grade?: string; credits: number }) => {
+          const course = selectedPlan.semesters
+            .flatMap((s: SemesterPlan) => s.courses)
+            .find((pc: PlannedCourse) => pc.code === c.code);
+          return course?.category === 'elective' && c.code.startsWith('CIS');
+        })
+        .reduce((sum: number, c: { code: string; name: string; grade?: string; credits: number }) => sum + c.credits, 0);
+      const genEdFoundation = completedCourses
+        .filter((c: { code: string; name: string; grade?: string; credits: number }) => {
+          const course = selectedPlan.semesters
+            .flatMap((s: SemesterPlan) => s.courses)
+            .find((pc: PlannedCourse) => pc.code === c.code);
+          return course?.category === 'gen-ed' && ['GW', 'GQ', 'GY', 'GZ'].includes(course.genEdAttribute || '');
+        })
+        .reduce((sum: number, c: { code: string; name: string; grade?: string; credits: number }) => sum + c.credits, 0);
+      const genEdBreadth = completedCourses
+        .filter((c: { code: string; name: string; grade?: string; credits: number }) => {
+          const course = selectedPlan.semesters
+            .flatMap((s: SemesterPlan) => s.courses)
+            .find((pc: PlannedCourse) => pc.code === c.code);
+          return course?.category === 'gen-ed' && !['GW', 'GQ', 'GY', 'GZ'].includes(course.genEdAttribute || '');
+        })
+        .reduce((sum: number, c: { code: string; name: string; grade?: string; credits: number }) => sum + c.credits, 0);
+
+      const requirementsProgress = [
+        { name: 'CIS Core', completed: cisCore, total: 47 },
+        { name: 'Mathematics', completed: math, total: 8 },
+        { name: 'Lab Science', completed: labScience, total: 8 },
+        { name: 'CS Electives', completed: csElectives, total: 16 },
+        { name: 'Gen Ed Foundation', completed: genEdFoundation, total: 14 },
+        { name: 'Gen Ed Breadth', completed: genEdBreadth, total: 22 },
+      ];
+
+      const currentSemester = currentSemesterIndex >= 0 
+        ? selectedPlan.semesters[currentSemesterIndex].semester 
+        : selectedPlan.semesters.find((s: SemesterPlan) => s.status === 'planned')?.semester || 1;
+
+      const insightsData: PlanInsightsData = {
+        userName: userProfile.name,
+        major: userProfile.major,
+        careerGoal: userProfile.careerGoal,
+        completedCourses,
+        currentSemester,
+        totalSemesters: 8,
+        gpa: gpaData.gpa,
+        completedCredits: gpaData.completedCredits,
+        totalCredits: 120,
+        upcomingCourses: upcomingCourses.slice(0, 10),
+        requirementsProgress,
+        planName: selectedPlan.name,
+      };
+
+      const insights = await generatePersonalizedInsights(insightsData);
+      setPersonalizedInsights(insights);
+    } catch (error) {
+      console.error('Failed to generate insights:', error);
+      toast.error('Failed to generate personalized insights');
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
+
+  // Generate insights when overview tab is opened or dashboard loads
+  useEffect(() => {
+    if (view === 'dashboard' && userProfile && selectedPlan && activeTab === 'overview') {
+      // Generate insights when tab opens (will skip if already loading)
+      if (!insightsLoading) {
+        generateInsights();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, userProfile, selectedPlan?.id, activeTab]);
+
+  // Reset insights when plan changes
+  useEffect(() => {
+    setPersonalizedInsights(null);
+  }, [selectedPlanId]);
 
   // Show loading screen during initial auth check
   if (loading) {
@@ -682,16 +826,44 @@ export default function App() {
                           <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-6 border border-indigo-200">
                             <div className="flex gap-3">
                               <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0">
-                                <span className="text-white font-bold">AI</span>
+                                {insightsLoading ? (
+                                  <Loader2 className="w-6 h-6 text-white animate-spin" />
+                                ) : (
+                                  <span className="text-white font-bold">AI</span>
+                                )}
                               </div>
                               <div className="flex-1">
                                 <h4 className="font-semibold text-indigo-900 mb-2">Personalized Insights</h4>
-                                <ul className="space-y-2 text-sm text-indigo-800">
-                                  <li>• Your {selectedPlan.name.toLowerCase()} focuses on building {userProfile.careerGoal} skills progressively</li>
-                                  <li>• We've scheduled lighter semesters before internship periods to help you prepare</li>
-                                  <li>• Courses are sequenced to respect prerequisites while maximizing career relevance</li>
-                                  <li>• You'll have time for extracurriculars, networking, and personal projects</li>
-                                </ul>
+                                {insightsLoading ? (
+                                  <div className="text-sm text-indigo-700">
+                                    <p>Generating personalized insights...</p>
+                                  </div>
+                                ) : personalizedInsights ? (
+                                  <div className="space-y-3">
+                                    <ul className="space-y-2 text-sm text-indigo-800">
+                                      {personalizedInsights.insights.map((insight, index) => (
+                                        <li key={index}>• {insight}</li>
+                                      ))}
+                                    </ul>
+                                    {personalizedInsights.summary && (
+                                      <p className="text-sm text-indigo-700 italic mt-3 pt-3 border-t border-indigo-200">
+                                        {personalizedInsights.summary}
+                                      </p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-sm text-indigo-700">
+                                    <p>Click to generate insights...</p>
+                                    <Button
+                                      onClick={generateInsights}
+                                      size="sm"
+                                      variant="outline"
+                                      className="mt-2 border-indigo-300 text-indigo-700 hover:bg-indigo-100"
+                                    >
+                                      Generate Insights
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>

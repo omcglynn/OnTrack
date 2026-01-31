@@ -350,3 +350,146 @@ export const generateScheduleRecommendation = async (
     throw new Error('Failed to generate schedule. Please try again.');
   }
 };
+
+// Types for personalized insights
+export interface PlanInsightsData {
+  userName: string;
+  major: string;
+  careerGoal: string;
+  completedCourses: Array<{ code: string; name: string; grade?: string; credits: number }>;
+  currentSemester: number;
+  totalSemesters: number;
+  gpa: number;
+  completedCredits: number;
+  totalCredits: number;
+  upcomingCourses: Array<{ code: string; name: string; semester: number; season: string; year: number }>;
+  requirementsProgress: Array<{ name: string; completed: number; total: number }>;
+  planName: string;
+}
+
+export interface PersonalizedInsights {
+  insights: string[]; // Array of insight bullet points
+  summary: string; // Brief summary paragraph
+}
+
+// Build prompt for personalized insights generation
+const buildInsightsPrompt = (data: PlanInsightsData): string => {
+  const completedCoursesStr = data.completedCourses.length > 0
+    ? data.completedCourses.map(c => 
+        `${c.code} - ${c.name} (${c.credits}cr${c.grade ? `, Grade: ${c.grade}` : ''})`
+      ).join('\n')
+    : 'None yet';
+
+  const upcomingCoursesStr = data.upcomingCourses.length > 0
+    ? data.upcomingCourses.slice(0, 10).map(c => 
+        `${c.code} - ${c.name} (${c.season} ${c.year}, Semester ${c.semester})`
+      ).join('\n')
+    : 'None planned yet';
+
+  const requirementsStr = data.requirementsProgress.map(req => 
+    `${req.name}: ${req.completed}/${req.total} credits (${Math.round((req.completed / req.total) * 100)}%)`
+  ).join('\n');
+
+  const progressPercentage = Math.round((data.completedCredits / data.totalCredits) * 100);
+  const semestersRemaining = data.totalSemesters - data.currentSemester;
+
+  return `You are an expert academic advisor providing personalized insights to a student. Generate insightful, encouraging, and actionable insights about their academic journey.
+
+## Student Profile
+- Name: ${data.userName}
+- Major: ${data.major}
+- Career Goal: ${data.careerGoal}
+- Current Semester: ${data.currentSemester} of ${data.totalSemesters}
+- Plan Type: ${data.planName}
+
+## Academic Progress
+- Cumulative GPA: ${data.gpa > 0 ? data.gpa.toFixed(2) : 'N/A (no completed courses yet)'}
+- Credits Completed: ${data.completedCredits}/${data.totalCredits} (${progressPercentage}% to graduation)
+- Semesters Remaining: ${semestersRemaining}
+
+## Completed Courses
+${completedCoursesStr}
+
+## Requirements Progress
+${requirementsStr}
+
+## Upcoming Courses (Next Few Semesters)
+${upcomingCoursesStr}
+
+## Your Task
+Generate personalized insights that cover:
+1. **Journey So Far**: Reflect on their progress, strengths, and achievements
+2. **Current Standing**: Where they are now academically, what they've accomplished, and their trajectory
+3. **What's Ahead**: What's coming next, key milestones, opportunities, and challenges
+
+## Response Format
+You MUST respond with ONLY a JSON object in this exact format, no other text:
+{
+  "insights": [
+    "First insight about their journey so far",
+    "Second insight about where they stand now",
+    "Third insight about what's to come",
+    "Additional insight (4-6 total insights)"
+  ],
+  "summary": "A brief 2-3 sentence summary paragraph that ties everything together"
+}
+
+## Guidelines
+- Be specific: Reference actual courses, GPA, progress percentages
+- Be encouraging: Highlight achievements and positive trajectory
+- Be insightful: Connect their progress to their career goals
+- Be forward-looking: Mention upcoming opportunities and milestones
+- Keep insights concise (1-2 sentences each)
+- Make it personal and relevant to their specific situation
+- If GPA is high, celebrate it; if it's improving, note the trend
+- Mention specific courses that are particularly relevant to their career goal
+- Note any patterns (e.g., strong performance in certain areas, upcoming challenging semesters)`;
+};
+
+// Generate personalized insights
+export const generatePersonalizedInsights = async (
+  data: PlanInsightsData
+): Promise<PersonalizedInsights> => {
+  if (!genAI) {
+    throw new Error('Gemini API is not configured. Please add VITE_GEMINI_API_KEY to your .env file.');
+  }
+
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    generationConfig: {
+      responseMimeType: 'application/json',
+    },
+  });
+
+  const prompt = buildInsightsPrompt(data);
+  
+  try {
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+    
+    const parsed = JSON.parse(text) as PersonalizedInsights;
+    
+    // Validate the response
+    if (!parsed.insights || !Array.isArray(parsed.insights) || parsed.insights.length === 0) {
+      throw new Error('Invalid response: missing or empty insights array');
+    }
+    
+    if (!parsed.summary || typeof parsed.summary !== 'string') {
+      throw new Error('Invalid response: missing summary');
+    }
+    
+    return parsed;
+  } catch (e) {
+    console.error('Failed to parse AI insights response:', e);
+    // Return fallback insights if AI fails
+    return {
+      insights: [
+        `You've completed ${data.completedCredits} credits toward your ${data.major} degree, putting you ${Math.round((data.completedCredits / data.totalCredits) * 100)}% of the way to graduation.`,
+        `Your ${data.planName.toLowerCase()} plan is designed to build ${data.careerGoal} skills progressively throughout your academic journey.`,
+        `With ${data.totalSemesters - data.currentSemester} semesters remaining, you're well-positioned to achieve your career goals.`,
+      ],
+      summary: `You're making great progress on your path to becoming a ${data.careerGoal}. Keep up the excellent work!`,
+    };
+  }
+};
