@@ -120,7 +120,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
           <div className="pt-6 border-t border-white/20">
             <p className="text-sm text-blue-100">
-              Built for Temple University Japan Hackathon 2025
+              Built for Temple University Japan Hackathon 2026
             </p>
           </div>
         </div>

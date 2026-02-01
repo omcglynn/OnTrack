@@ -135,6 +135,13 @@
 
   html {
     font-size: var(--font-size);
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
   }
 
   h1 {

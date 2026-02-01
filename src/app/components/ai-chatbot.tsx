@@ -12,6 +12,8 @@ import {
   Calendar,
   X 
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { sendMessageWithCodeExecution, generateScheduleRecommendation, AIScheduleRecommendation } from '@/app/lib/gemini';
 
 interface Message {
@@ -264,9 +266,11 @@ export function AIChatbot({
                     ? 'bg-purple-50 border-purple-200'
                     : 'bg-white'
               }`}>
-                <p className="text-sm whitespace-pre-line leading-relaxed break-words overflow-wrap-anywhere">
-                  {message.content}
-                </p>
+                <div className="text-sm leading-relaxed break-words overflow-wrap-anywhere [&>h1]:text-lg [&>h1]:font-bold [&>h1]:mt-3 [&>h1]:mb-2 [&>h2]:text-base [&>h2]:font-bold [&>h2]:mt-2 [&>h2]:mb-2 [&>h3]:text-sm [&>h3]:font-semibold [&>h3]:mt-2 [&>h3]:mb-1 [&>p]:my-2 [&>ul]:my-2 [&>ul]:list-disc [&>ul]:ml-4 [&>ol]:my-2 [&>ol]:list-decimal [&>ol]:ml-4 [&>li]:my-1 [&>code]:text-purple-600 [&>code]:bg-purple-50 [&>code]:px-1.5 [&>code]:py-0.5 [&>code]:rounded [&>code]:text-xs [&>code]:font-mono [&>pre]:bg-gray-900 [&>pre]:text-gray-100 [&>pre]:p-3 [&>pre]:rounded-lg [&>pre]:overflow-x-auto [&>pre]:my-2 [&>pre>code]:bg-transparent [&>pre>code]:text-gray-100 [&>pre>code]:p-0 [&>strong]:font-semibold [&>em]:italic [&>a]:text-blue-600 [&>a]:underline hover:[&>a]:text-blue-800 [&>blockquote]:border-l-4 [&>blockquote]:border-gray-300 [&>blockquote]:pl-4 [&>blockquote]:italic [&>blockquote]:my-2 [&>table]:w-full [&>table]:border-collapse [&>table]:my-2 [&>th]:border [&>th]:border-gray-300 [&>th]:px-2 [&>th]:py-1 [&>th]:bg-gray-100 [&>th]:text-left [&>td]:border [&>td]:border-gray-300 [&>td]:px-2 [&>td]:py-1">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
                 {/* View Schedule Button for schedule generation responses */}
                 {message.type === 'schedule-generation' && message.scheduleData && onScheduleGenerated && (
                   <Button

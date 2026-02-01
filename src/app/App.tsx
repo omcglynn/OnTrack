@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { supabase, isSupabaseConfigured } from '@/app/lib/supabase';
@@ -167,6 +167,7 @@ export default function App() {
       await supabase.auth.signOut();
       setUserProfile(null);
       setSelectedPlanId(null);
+      setPersonalizedInsights(null);
       setView('auth');
       toast.success('Logged out successfully');
     } catch (error: any) {
@@ -413,17 +414,6 @@ export default function App() {
     }
   };
 
-  // Generate insights when overview tab is opened or dashboard loads
-  useEffect(() => {
-    if (view === 'dashboard' && userProfile && selectedPlan && activeTab === 'overview') {
-      // Generate insights when tab opens (will skip if already loading)
-      if (!insightsLoading) {
-        generateInsights();
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, userProfile, selectedPlan?.id, activeTab]);
-
   // Reset insights when plan changes
   useEffect(() => {
     setPersonalizedInsights(null);
@@ -634,12 +624,29 @@ export default function App() {
                 </div>
 
                 <div 
-                  className="flex-1 overflow-y-auto scroll-smooth"
+                  className="flex-1 overflow-y-auto"
+                  style={{ 
+                    overscrollBehavior: 'none',
+                    overscrollBehaviorY: 'none',
+                    overscrollBehaviorX: 'none'
+                  }}
                   onScroll={(e) => {
                     const target = e.target as HTMLDivElement;
                     const currentScrollY = target.scrollTop;
+                    const maxScroll = target.scrollHeight - target.clientHeight;
                     const lastScrollY = lastScrollYRef.current;
                     const scrollDelta = currentScrollY - lastScrollY;
+                    
+                    // Don't update header visibility when at the very bottom to prevent bounce
+                    const isAtBottom = currentScrollY >= maxScroll - 10;
+                    if (isAtBottom) {
+                      // Clamp scroll position to prevent overscroll
+                      if (currentScrollY > maxScroll) {
+                        target.scrollTop = maxScroll;
+                      }
+                      lastScrollYRef.current = currentScrollY;
+                      return;
+                    }
                     
                     // Only change header visibility with significant scroll movement
                     // and add a dead zone to prevent jitter
@@ -658,7 +665,7 @@ export default function App() {
                     }
                   }}
                 >
-                  <div className="container mx-auto max-w-5xl px-4 py-8">
+                  <div className="container mx-auto max-w-5xl px-4 py-8 pb-20">
                     {/* Tabs */}
                     <Tabs value={activeTab} onValueChange={(tab) => {
                       // When switching to schedule tab, default to current (in-progress) semester
