@@ -2,19 +2,37 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ScrollArea } from '@/app/components/ui/scroll-area';
 import { Button } from '@/app/components/ui/button';
 import { Card } from '@/app/components/ui/card';
-import { 
-  Send, 
-  Bot, 
-  User, 
-  Sparkles, 
-  Loader2, 
-  AlertCircle, 
+import {
+  Send,
+  Bot,
+  User,
+  Sparkles,
+  Loader2,
+  AlertCircle,
   Calendar,
-  X 
+  KeyRound,
+  ShieldCheck,
+  X,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { sendMessageWithCodeExecution, generateScheduleRecommendation, AIScheduleRecommendation } from '@/app/lib/gemini';
+import {
+  sendMessageWithCodeExecution,
+  generateScheduleRecommendation,
+  AIScheduleRecommendation,
+  setGeminiApiKey,
+} from '@/app/lib/gemini';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/app/components/ui/dialog';
+import { Input } from '@/app/components/ui/input';
+import { Label } from '@/app/components/ui/label';
 
 interface Message {
   id: string;
@@ -57,6 +75,10 @@ export function AIChatbot({
   const [error, setError] = useState<string | null>(null);
   const [isScheduleMode, setIsScheduleMode] = useState(false);
   const [schedulePrompt, setSchedulePrompt] = useState('');
+  const [isApiKeyDialogOpen, setIsApiKeyDialogOpen] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [hasCustomApiKey, setHasCustomApiKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -82,6 +104,15 @@ export function AIChatbot({
   useEffect(() => {
     adjustTextareaHeight();
   }, [input, adjustTextareaHeight]);
+
+  // Detect whether a custom Gemini API key has already been set in this browser
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storedKey = window.localStorage.getItem('ontrack_gemini_api_key');
+    if (storedKey && storedKey.trim().length > 0) {
+      setHasCustomApiKey(true);
+    }
+  }, []);
 
   const handleSend = async (messageText?: string) => {
     const textToSend = messageText || input.trim();
@@ -212,6 +243,30 @@ export function AIChatbot({
     }
   };
 
+  const handleSaveApiKey = () => {
+    setApiKeyError(null);
+
+    const trimmed = apiKeyInput.trim();
+
+    // Allow clearing the key to fall back to environment configuration
+    if (!trimmed) {
+      setGeminiApiKey(null);
+      setHasCustomApiKey(false);
+      setIsApiKeyDialogOpen(false);
+      return;
+    }
+
+    // Basic length check to avoid obviously invalid values
+    if (trimmed.length < 10) {
+      setApiKeyError('This does not look like a valid Gemini API key.');
+      return;
+    }
+
+    setGeminiApiKey(trimmed);
+    setHasCustomApiKey(true);
+    setIsApiKeyDialogOpen(false);
+  };
+
   return (
     <div className="w-96 bg-white border-l shadow-sm flex flex-col h-full overflow-hidden">
       {/* Header */}
@@ -227,7 +282,75 @@ export function AIChatbot({
               <span>Powered by Gemini</span>
             </div>
           </div>
-          <Sparkles className="w-5 h-5 text-yellow-300" />
+          <Dialog open={isApiKeyDialogOpen} onOpenChange={setIsApiKeyDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 text-yellow-100"
+                aria-label="Configure Gemini API key"
+              >
+                {hasCustomApiKey ? (
+                  <ShieldCheck className="w-4 h-4" />
+                ) : (
+                  <KeyRound className="w-4 h-4" />
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Gemini API Key</DialogTitle>
+                <DialogDescription>
+                  Provide your own Gemini API key to enable AI advising. Your key is stored only in
+                  this browser (local storage) and used directly from your device.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="gemini-api-key">
+                    API Key
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {' '}
+                      (e.g., starts with <code>AIza</code>)
+                    </span>
+                  </Label>
+                  <Input
+                    id="gemini-api-key"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="Enter your Gemini API key"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    aria-invalid={!!apiKeyError}
+                  />
+                  {apiKeyError && (
+                    <p className="text-xs text-red-500" role="alert">
+                      {apiKeyError}
+                    </p>
+                  )}
+                  {hasCustomApiKey && (
+                    <p className="text-xs text-emerald-600 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" />
+                      A custom API key is currently active in this browser.
+                    </p>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  You can clear this field and save to remove your custom key and fall back to the
+                  default project configuration.
+                </p>
+              </div>
+              <DialogFooter className="mt-2">
+                <Button variant="outline" onClick={() => setIsApiKeyDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveApiKey} className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Save API Key
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 

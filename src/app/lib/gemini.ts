@@ -1,13 +1,50 @@
 import { GoogleGenerativeAI, Content } from '@google/generative-ai';
 import { COURSES, CAREER_PATHS, DEGREE_REQUIREMENTS, Course } from '@/app/data/mock-courses';
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const ENV_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-if (!API_KEY) {
-  console.warn('VITE_GEMINI_API_KEY is not set. AI features will not work.');
+let activeApiKey: string | null = null;
+let genAI: GoogleGenerativeAI | null = null;
+
+// Initialize API key from localStorage (if running in browser) or env as fallback
+if (typeof window !== 'undefined') {
+  const storedKey = window.localStorage.getItem('ontrack_gemini_api_key');
+  activeApiKey = storedKey && storedKey.trim().length > 0 ? storedKey.trim() : ENV_API_KEY || null;
+} else {
+  activeApiKey = ENV_API_KEY || null;
 }
 
-const genAI = API_KEY ? new GoogleGenerativeAI(API_KEY) : null;
+if (!activeApiKey) {
+  console.warn(
+    'Gemini API key is not set. AI features will not work until a key is provided via VITE_GEMINI_API_KEY or the in-app API key settings.'
+  );
+} else {
+  genAI = new GoogleGenerativeAI(activeApiKey);
+}
+
+export const setGeminiApiKey = (key: string | null) => {
+  // If the user clears the key, fall back to the env key (if any)
+  const nextKey = key && key.trim().length > 0 ? key.trim() : ENV_API_KEY || null;
+
+  activeApiKey = nextKey;
+
+  if (typeof window !== 'undefined') {
+    if (key && key.trim().length > 0) {
+      window.localStorage.setItem('ontrack_gemini_api_key', key.trim());
+    } else {
+      window.localStorage.removeItem('ontrack_gemini_api_key');
+    }
+  }
+
+  if (activeApiKey) {
+    genAI = new GoogleGenerativeAI(activeApiKey);
+  } else {
+    genAI = null;
+    console.warn(
+      'Gemini API key cleared. AI features will not work until a key is provided again.'
+    );
+  }
+};
 
 export interface ChatContext {
   userName?: string;
